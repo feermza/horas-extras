@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# Excel temporales
+~$*.xlsx
+~$*.xls
+
+# Cursor / VS Code
+.vscode/
+.idea/
