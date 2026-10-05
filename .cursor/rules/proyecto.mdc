@@ -1,0 +1,16 @@
+---
+description: Reglas permanentes del proyecto de horas extras
+alwaysApply: true
+---
+
+- La única fuente de reglas de negocio es docs/especificacion-v5.md. No inventar reglas, valores ni casos.
+- Ante una ambigüedad o un dato faltante, detenerse y preguntar. No implementar suposiciones.
+- No modificar docs/especificacion-v5.md.
+- Trabajar por fases (sección 15). No avanzar a la siguiente sin pruebas en verde.
+- El motor (src/motor) es puro: sin DOM, sin archivos, sin Excel, sin red.
+- Tiempo en minutos enteros. Dinero con aritmética exacta, nunca coma flotante.
+- Sin conexiones de red, sin CDN en tiempo de ejecución, sin telemetría.
+- Usar solo datos sintéticos. Nunca datos reales de personas.
+- El build final debe abrirse con doble clic (file://).
+- Responder y comentar el código en español.
+- Al terminar cada tarea: listar archivos creados o modificados y el resultado de las pruebas.

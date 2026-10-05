@@ -8,6 +8,10 @@ env/
 ~$*.xlsx
 ~$*.xls
 
+# Node
+node_modules/
+dist/
+
 # Cursor / VS Code
 .vscode/
 .idea/
