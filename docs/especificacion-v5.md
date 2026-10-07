@@ -1,6 +1,6 @@
 # ESPECIFICACIÓN FUNCIONAL Y TÉCNICA: MOTOR DE CÁLCULO DE HORAS EXTRAS E INFORME PARA REVISIÓN
 
-**Versión 5.** Documento único y autosuficiente para implementar el sistema. Reemplaza a las v3 y v4.
+**Versión 5.1.** Documento único y autosuficiente para implementar el sistema. Reemplaza a las v3, v4 y v5.
 
 ---
 
@@ -74,6 +74,7 @@ datos/
 - Todo tiempo se maneja internamente como **minutos enteros**. Se muestra como `H:MM`.
 - Las marcaciones se normalizan al minuto. Si el archivo trajera segundos, se truncan al minuto.
 - Duración de un par: si `salida >= ingreso`, `salida - ingreso`; si `salida < ingreso`, hay cruce de medianoche y se suma 1440 antes de restar.
+- La salida de un par figura siempre en la fila del día de ingreso, aunque ocurra después de la medianoche (por ejemplo, ingreso 08:00 y salida 00:03 en la misma fila).
 - La conversión a horas decimales ocurre solo en la liquidación (sección 9).
 
 ### 3.2. Magnitudes de un día (nombres fijos)
@@ -101,6 +102,8 @@ Para cada fecha se determina un único tipo de día con esta prioridad:
 
 Si un feriado cae en sábado o domingo, prevalece `FERIADO`. Feriados, asuetos y paros se determinan **solo por fecha** desde sus estructuras, nunca por texto libre.
 
+El tipo de día se sigue determinando con esta prioridad y se muestra en el informe. Excepción de cálculo: la `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día en las reglas de cálculo (ver 6.3 y 8.2).
+
 ### 3.4. Un agente no parte sus horas extras
 
 En días hábiles las horas extras se hacen exclusivamente antes o exclusivamente después de la jornada, según la modalidad del agente. Nunca ambas el mismo día.
@@ -122,7 +125,7 @@ Cada archivo corresponde a un agente y a un mes. Datos a extraer:
 - Hasta tres pares `Ingreso` / `Salida`.
 - `Observaciones`.
 
-`Día` y `Turno` se conservan para contraste y auditoría; no son fuente de configuración. `Observaciones` se conserva íntegra.
+`Día` y `Turno` se conservan para contraste y auditoría; no son fuente de configuración. `Observaciones` se conserva íntegra. Si la salida de un par ocurre después de la medianoche, figura igualmente en la fila del día de ingreso. Las justificaciones de inasistencia se cargan en el sistema de origen desde un desplegable con una lista fija de opciones (Anexo B.1): el texto de la observación es el de una opción, sin variantes ni agregados.
 
 **Mapeo de columnas pendiente.** La posición exacta de columnas, la fila de encabezado y el formato de fechas y horas deben tomarse del archivo real exportado (con datos anonimizados). Hasta tenerlo, la capa de importación se implementa detrás de esta interfaz y se prueba con datos sintéticos:
 
@@ -216,22 +219,24 @@ Reglas:
 { "eventos": [ { "fecha": "2026-08-20", "tipo": "ASUETO", "descripcion": "…", "tope_especial": null } ] }
 ```
 
-`tipo` es `ASUETO` o `PARO`. `tope_especial` es opcional; si existe, **prevalece** sobre el tope del agente para esa fecha.
+`tipo` es `ASUETO` o `PARO`. `tope_especial` es opcional; si existe, **prevalece** sobre el tope del agente para esa fecha (salvo con `LIC. ANUAL ORDINARIA`, ver 8.2).
 
 ### 5.4. `catalogos.json`
 
 ```json
 {
   "justificaciones": [
-    { "codigo": "LICENCIA_ANUAL_ORDINARIA", "descripcion": "LIC. ANUAL ORDINARIA", "alias": ["LICENCIA ANUAL ORDINARIA", "LAO"], "clase": "ESPECIAL_LAO_RECESO" },
-    { "codigo": "AUSENTE_POR_ENFERMEDAD", "descripcion": "AUSENTE POR ENFERMEDAD", "alias": [], "clase": "COMPLETA" }
+    { "codigo": "LICENCIA_ANUAL_ORDINARIA", "descripcion": "LIC. ANUAL ORDINARIA", "clase": "ESPECIAL_LAO_RECESO" },
+    { "codigo": "AUSENTE_POR_ENFERMEDAD", "descripcion": "AUSENTE POR ENFERMEDAD", "clase": "COMPLETA" }
   ],
   "permisos": [
-    { "codigo": "PERMISO_MEDIA_JORNADA", "descripcion": "PERMISO MEDIA JORNADA", "alias": [], "jornada_exigible": "03:30" }
+    { "codigo": "PERMISO_MEDIA_JORNADA", "descripcion": "PERMISO MEDIA JORNADA", "jornada_exigible": "03:30" }
   ],
   "umbral_minimo": "00:50"
 }
 ```
+
+Las novedades no tienen alias: se reconocen solo por su descripción.
 
 Los catálogos iniciales están en el Anexo B. Los valores de `jornada_exigible` y el `umbral_minimo` son datos, no constantes de código.
 
@@ -246,17 +251,17 @@ Para comparar textos: pasar a mayúsculas, quitar tildes, reemplazar puntuación
 ### 6.2. Reconocimiento
 
 1. Normalizar la observación.
-2. Buscar en justificaciones y permisos las entradas cuya descripción o alias normalizados aparezcan en la observación como **secuencia de palabras completas**.
-3. Una coincidencia: se asigna el código interno. Cero: la observación es descriptiva (se conserva sin efecto) o, si parece una novedad, `OBSERVACION_NO_RECONOCIDA` (advertencia). Más de una: `NOVEDAD_DUPLICADA_EN_FECHA` (bloqueante).
+2. Buscar en justificaciones y permisos las entradas cuya descripción normalizada aparezca en la observación como **secuencia de palabras completas**.
+3. Una coincidencia: se asigna el código interno. Cero: si la observación no está vacía, se genera `OBSERVACION_NO_RECONOCIDA` (advertencia), el día se calcula sin novedad y el cálculo no se frena; si está vacía, no hay novedad. Más de una entrada del catálogo: `NOVEDAD_DUPLICADA_EN_FECHA` (bloqueante). Por diseño del sistema de origen no se espera más de una novedad por fecha; esta detección es una red de seguridad.
 4. La observación original siempre se conserva.
 
-### 6.3. Efecto de cada clase de novedad (solo en `HABIL_NORMAL`)
+### 6.3. Efecto de cada clase de novedad (en `HABIL_NORMAL`; la `LIC. ANUAL ORDINARIA` tiene una excepción al final de esta sección)
 
 - `COMPLETA`: `Jornada_Exigible = 00:00`; no habilita extras.
 - `ESPECIAL_LAO_RECESO` (licencia anual ordinaria y receso invernal): `Jornada_Exigible = 00:00`; permite extras por razones de servicio.
 - Permiso parcial: la jornada exigible pasa a ser la del permiso (por ejemplo, 03:30 o 02:00) en lugar de la jornada normal.
 
-En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y no modifican el cálculo.
+En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y no modifican el cálculo, con una excepción: la `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día. El sistema de origen la informa como días corridos, en la observación de todas las filas que cubre, incluidos sábados, domingos, feriados, asuetos y paros; por eso se reconoce fila por fila, sin mirar los días vecinos. En esas fechas se aplica la regla de `ESPECIAL_LAO_RECESO` de 8.2 con factor 1. `RECESO INVERNAL` y las justificaciones de clase `COMPLETA` no tienen esta excepción. En cada fecha rige una sola novedad (3.5): si una fecha de la licencia trae en cambio una justificación de clase `COMPLETA` (por ejemplo enfermedad o duelo), rige esa justificación.
 
 ---
 
@@ -296,6 +301,8 @@ para cada fecha del mes:
 ```
 
 ### 8.2. Reglas por tipo de día (`reglas_por_tipo`)
+
+**Excepción: `LIC. ANUAL ORDINARIA` en días que no son hábiles normales.** Si la fecha tiene la novedad `LIC. ANUAL ORDINARIA` y su tipo de día es `FERIADO`, `ASUETO`, `PARO`, `SABADO` o `DOMINGO`: `realizada = trab`, `tope = cfg.tope_lao_receso`, `factor = 1`, sin modalidad ni franja y sin tiempo no computable. La licencia prevalece sobre el tipo de día, incluido el `tope_especial` de un evento: en `ASUETO` o `PARO` se usa `cfg.tope_lao_receso`, no el `tope_especial`. En `HABIL_NORMAL` rige la regla de `ESPECIAL_LAO_RECESO` de más abajo, que da el mismo resultado. No se generan los avisos `TRABAJO_DOMINGO_SIN_AUTORIZACION` ni `TRABAJO_SABADO_NO_HABILITADO`; si `tope_lao_receso` fuera `00:00`, corresponde `SIN_AUTORIZACION_DIA`. Las reglas por tipo de día que siguen se aplican cuando no rige esta excepción.
 
 **`HABIL_NORMAL`**
 
@@ -375,7 +382,7 @@ Se calcula normalmente y se marca. El aviso se redacta en lenguaje llano, para e
 | `OBSERVACION_NO_RECONOCIDA` | "Observación no reconocida: {texto}" |
 | `TURNO_DISTINTO_CONFIG` | "El turno informado difiere de la configuración" |
 
-Elección del aviso por exceso: si `realizada > 0` y `computada < realizada`, el motivo es `BAJO_UMBRAL` si `realizada < umbral`; si no, `SIN_AUTORIZACION_DIA` (o el aviso específico de domingo o sábado) si `tope = 0`; si no, `EXCEDENTE_SOBRE_TOPE`.
+Elección del aviso por exceso: si `realizada > 0` y `computada < realizada`, el motivo es `BAJO_UMBRAL` si `realizada < umbral`; si no, `SIN_AUTORIZACION_DIA` (o el aviso específico de domingo o sábado) si `tope = 0`; si no, `EXCEDENTE_SOBRE_TOPE`. Excepción: con `LIC. ANUAL ORDINARIA` en un día que no es hábil normal (8.2), si el tope es cero se usa siempre `SIN_AUTORIZACION_DIA`, nunca los avisos específicos de domingo o sábado.
 
 El tiempo `no_computable` por modalidad o por franja de sábado se muestra pero **no genera aviso**.
 
@@ -489,7 +496,7 @@ Replica el formato de la planilla de consulta mensual.
 
 Contiene:
 
-- `codigo_emision` (identificador único de esta generación), fecha y hora de generación, período, grupo, versión de la especificación (5) y versión del motor.
+- `codigo_emision` (identificador único de esta generación), fecha y hora de generación, período, grupo, versión de la especificación (5.1) y versión del motor.
 - Una tabla con una fila por agente: `agente_id`, nombre de la hoja, legajo y la configuración vigente aplicada (horario, modalidad, topes, valor hora). Así el libro es auditable aun sin el programa.
 
 ---
@@ -542,8 +549,8 @@ Cada fase termina con pruebas en verde y se confirma antes de avanzar.
 |---|---|---|
 | 0 | Esqueleto: Vite con `vite-plugin-singlefile`, Vitest, carpetas. | El HTML generado se abre con doble clic y ejecuta una prueba trivial. |
 | 1 | Utilidades de tiempo (parseo, formato, duración con cruce de medianoche, intersección de intervalos) y normalización de texto. | Pruebas unitarias, incluido el caso 17 del Anexo A. |
-| 2 | Clasificación del día y reconocimiento de novedades. | Prioridad de tipos de día; reconocimiento por alias; duplicados detectados. |
-| 3 | Cálculo diario (secciones 7 y 8). | Casos 1 a 19 del Anexo A. |
+| 2 | Clasificación del día y reconocimiento de novedades. | Prioridad de tipos de día; reconocimiento por descripción; duplicados detectados. |
+| 3 | Cálculo diario (secciones 7 y 8). | Casos 1 a 24 del Anexo A. |
 | 4 | Cálculo mensual por agente, liquidación (9) y avisos (10). | Casos de liquidación del Anexo A. |
 | 5 | Persistencia JSON con File System Access API y alternativa manual. | Ida y vuelta de todos los archivos de la sección 5. |
 | 6 | Importación del Excel exportado, con el archivo real anonimizado. | Producir la estructura de la sección 4 desde un archivo real. |
@@ -587,15 +594,27 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 
 ---
 
+## 17 bis. CAMBIOS RESPECTO DE LA v5 (v5.1)
+
+1. Salida tras medianoche en la fila del día de ingreso.
+2. Observaciones de desplegable.
+3. Novedades sin alias.
+4. `OBSERVACION_NO_RECONOCIDA` ante cualquier observación no vacía sin coincidencia.
+5. `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día.
+6. Casos 20 a 24 del Anexo A.
+7. Con `LIC. ANUAL ORDINARIA`, `tope_lao_receso` prevalece sobre el `tope_especial` de un asueto o paro.
+
+---
+
 ## 18. SUPUESTOS ADOPTADOS A CONFIRMAR
 
 1. **Horas dobles:** se muestran como horas equivalentes (cada hora doble cuenta por dos) para mantener un único valor por hora en el resumen.
-2. **Novedades:** solo modifican el cálculo en días `HABIL_NORMAL`.
+2. **Novedades:** solo modifican el cálculo en días `HABIL_NORMAL`, salvo la `LIC. ANUAL ORDINARIA`, que prevalece sobre el tipo de día (excepción confirmada): se informa como días corridos, fila por fila, y en feriado, sábado, domingo, asueto o paro se calcula con `tope_lao_receso` y factor 1.
 3. **Paro:** se trata como asueto (factor simple, tope propio del agente para paros).
-4. **Evento con tope especial:** prevalece sobre el tope del agente para esa fecha.
+4. **Evento con tope especial:** prevalece sobre el tope del agente para esa fecha, salvo que el agente tenga `LIC. ANUAL ORDINARIA` ese día (prevalece `tope_lao_receso`).
 5. **Sábado habilitado:** el tiempo fuera de la franja es no computable, sin aviso.
 6. **Tope vacío:** vale `00:00`; la interfaz exige completar todos los topes.
-7. **Reconocimiento de novedades:** por coincidencia de palabras completas dentro de la observación.
+7. **Reconocimiento de novedades:** por coincidencia de palabras completas dentro de la observación (confirmado).
 8. **Segundos:** si el archivo trajera segundos, se truncan al minuto.
 9. **Límite de autorización:** el jefe puede fijar horas finales entre cero y lo realizado, nunca más que lo realizado.
 10. **Fechas bloqueadas:** se muestran en rojo y no editables; no se generan hojas de agentes sin configuración.
@@ -624,11 +643,16 @@ Salvo indicación, el agente tiene: franja `08:00-14:30`, modalidad `DESPUES`, `
 | 12 | Domingo | trabajó 3:00 | 3:00 | 0:00 | 0:00 | 3:00 | `TRABAJO_DOMINGO_SIN_AUTORIZACION` |
 | 13 | Sábado habilitado (franja 08:00-12:00, tope 4:00) | 08:00-13:00 | 4:00 (no computable 1:00) | 4:00 | 4:00 | 0:00 | ninguno |
 | 14 | Sábado no habilitado | trabajó 3:00 | 3:00 | 0:00 | 0:00 | 3:00 | `TRABAJO_SABADO_NO_HABILITADO` |
-| 15 | Licencia anual ordinaria con trabajo | trabajó 5:00 | 5:00 | 8:00 | 5:00 | 0:00 | ninguno |
+| 15 | Licencia anual ordinaria con trabajo | novedad `LIC. ANUAL ORDINARIA` (día hábil); trabajó 5:00 | 5:00 | 8:00 | 5:00 | 0:00 | ninguno |
 | 16 | Justificación común con marcaciones | `AUSENTE POR ENFERMEDAD`, 08:00-12:00 | 0:00 | 0:00 | 0:00 | 0:00 | `MARCACIONES_EN_DIA_JUSTIFICADO` |
 | 17 | Cruce de medianoche | 22:00-01:30 | `Hs_Trab = 3:30` | | | | |
 | 18 | Asueto con tope especial 02:00 | trabajó 3:00 | 3:00 | 2:00 | 2:00 | 1:00 | `EXCEDENTE_SOBRE_TOPE` |
 | 19 | Dos novedades en la misma fecha | | | | | | bloqueante `NOVEDAD_DUPLICADA_EN_FECHA` |
+| 20 | Licencia anual ordinaria en feriado (factor 1, no 2) | novedad `LIC. ANUAL ORDINARIA`; trabajó 5:00 | 5:00 | 8:00 | 5:00 | 0:00 | ninguno |
+| 21 | Licencia anual ordinaria en sábado no habilitado | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
+| 22 | Licencia anual ordinaria en domingo | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
+| 23 | Licencia anual ordinaria en feriado con exceso (factor 1) | novedad `LIC. ANUAL ORDINARIA`; trabajó 9:00 | 9:00 | 8:00 | 8:00 | 1:00 | `EXCEDENTE_SOBRE_TOPE` |
+| 24 | Licencia anual ordinaria en asueto con tope especial 02:00 (prevalece `tope_lao_receso`) | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
 
 ### A.2. Liquidación
 
@@ -663,7 +687,7 @@ Clase `COMPLETA` (`Jornada_Exigible = 00:00`, sin extras):
 
 Clase `ESPECIAL_LAO_RECESO` (`Jornada_Exigible = 00:00`, permite extras por razones de servicio):
 
-`LIC. ANUAL ORDINARIA` (alias `LICENCIA ANUAL ORDINARIA`, `LAO`), `RECESO INVERNAL`.
+`LIC. ANUAL ORDINARIA`, `RECESO INVERNAL`.
 
 ### B.2. Permisos parciales
 
