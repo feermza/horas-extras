@@ -16,3 +16,11 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 2: jornadaExigible se guarda en minutos enteros, parseados con parsearDuracion. La descripción del resultado es la del catálogo, sin normalizar.
 - Fase 2: un catálogo con descripción vacía al normalizar, clase distinta de COMPLETA o ESPECIAL_LAO_RECESO, o jornada_exigible inválida lanza RangeError.
 - Fase 2: el detalle de clasificarDia es el objeto original del feriado o del evento, o null. tope_especial no se interpreta en esta fase.
+- Fase 3: calcularDia devuelve las magnitudes de 3.2 en minutos enteros, más factor, tipo, novedad (el objeto reconocido o null), metodo, avisos, bloqueante y editable. Hs_Final arranca igual a la computada. Cada aviso es { codigo, realizada, tope, excedente, novedad, texto }, sin el texto llano.
+- Fase 3: editable es true solo si la realizada es mayor que 0 y no hay bloqueante. Una fecha bloqueada deja las magnitudes en 0, el factor en 1, el método en null, sin avisos y con editable false.
+- Fase 3: las horas de las marcaciones se interpretan con parsearHora antes de duracionPar e intervaloDePar. null, undefined y "" son un extremo vacío; cualquier otro valor no interpretable bloquea la fecha con DATOS_HORARIOS_IMPOSIBLES y no lanza. Una hora de la configuración que sí está cargada y no se puede interpretar lanza RangeError.
+- Fase 3: un par con ingreso y salida ambos vacíos se ignora. La vigencia contiene la fecha si vigencia_desde <= fecha y vigencia_hasta es null o fecha <= vigencia_hasta. Si dos configuraciones cubren la fecha, no se elige una: se lanza Error.
+- Dos configuraciones vigentes para la misma fecha: calcularDia lanza Error como resguardo; la interfaz lo previene (5.1) y la fase 4 debe capturarlo por agente e informarlo como bloqueante, sin romper el programa.
+- Una hora de la configuración mal formada lanza RangeError: es un dato roto, no DATOS_HORARIOS_IMPOSIBLES, que queda reservado para las marcaciones. La validación al guardar y al leer corresponde a las fases 5 y 8.
+- La franja del sábado habilitado se cruza solo con [sabado_inicio, sabado_fin] y no se extiende pasada la medianoche.
+- TURNO_DISTINTO_CONFIG no se implementa.

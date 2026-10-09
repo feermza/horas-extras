@@ -185,10 +185,12 @@ Reglas:
 
 - `legajo`, `dni` y `concepto` se usan en el informe y en la resolución de pago; no intervienen en el cálculo.
 - **Vigencia:** para calcular una fecha se usa la configuración cuya vigencia la contenga. Permite recalcular meses pasados con los valores de entonces. Si ninguna cubre la fecha, `AGENTE_SIN_CONFIGURACION` (bloqueante).
+- La interfaz no permite guardar configuraciones de un mismo agente con vigencias superpuestas.
 - **Topes propios:** cada agente tiene sus propios topes por tipo de día. No existen topes generales de respaldo. Un tope vacío se interpreta como `00:00`.
 - Al dar de alta o editar una configuración, la interfaz **exige completar todos los topes** (0 es válido) para que un valor faltante no pase inadvertido. El alta precarga `tope_lao_receso` con `08:00`.
 - **Sábado:** está habilitado solo si hay `sabado_inicio` y `sabado_fin`. Si falta alguno, no está habilitado. Si solo se carga una de las dos horas, la configuración es inválida: la interfaz no permite guardarla y el motor la trata como no habilitado.
 - `duracion_jornada` se conserva como dato explícito de control y se puede validar contra `horario_fin - horario_inicio`.
+- Las horas de la configuración se validan (formato `HH:MM`) al guardar y al leer los archivos JSON; el motor asume datos válidos.
 - Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre` y `alias`. Sin coincidencia única: `AGENTE_SIN_CONFIGURACION`.
 
 ### 5.2. `grupos.json`
@@ -296,11 +298,13 @@ En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y 
 
 ### 7.1. Regla primaria: pares de marcaciones
 
-`Hs_Trab = Σ duración(ingreso_k, salida_k)` sobre los pares completos (3.1).
+Un par completo es el que tiene ingreso y salida cargados. Un par sin ningún extremo cargado se ignora: no cuenta como marcación.
+
+`Hs_Trab = Σ duración(ingreso_k, salida_k)` sobre los pares completos. La duración y el cruce de medianoche siguen 3.1.
 
 ### 7.2. Regla de contingencia: primera y última marcación
 
-Hay marcaciones incompletas cuando algún par tiene ingreso o salida vacíos (por ejemplo, 1, 3 o 5 marcaciones). Un par completo es un par con ingreso y salida.
+Hay marcaciones incompletas cuando algún par tiene un extremo cargado y el otro no (por ejemplo, 1, 3 o 5 marcaciones).
 
 En ese caso `Hs_Trab` es la duración desde la primera hasta la última marcación, en el orden de las columnas, con cruce de medianoche (3.1). Se marca el método como `MAX_MIN_ESTIMADO` y se genera `MARCACIONES_INCOMPLETAS` (advertencia). El método normal es `PARES_VALIDOS`.
 
@@ -361,7 +365,7 @@ Todos los demás casos tienen `factor = 1`.
 
 ### 8.3. Umbral
 
-`umbral_minimo = 00:50`, parametrizable. Es **inclusivo**: se computa desde `00:50` inclusive. Por debajo, `computada = 0` y el aviso es de bajo umbral.
+`umbral_minimo = 00:50`, parametrizable. Es **inclusivo**: se computa desde `00:50` inclusive. Por debajo, `computada = 0` y el aviso es de bajo umbral, salvo domingo y sábado no habilitado, donde rige siempre el aviso específico (10.2).
 
 ### 8.4. Casos que el jefe puede autorizar
 
@@ -413,7 +417,6 @@ Se calcula normalmente y se marca. El aviso se redacta en lenguaje llano, para e
 | `MARCACIONES_EN_DIA_JUSTIFICADO`   | "Hay marcaciones en un día justificado ({novedad})"                       |
 | `MARCACIONES_INCOMPLETAS`          | "Marcaciones incompletas: horas estimadas"                                |
 | `OBSERVACION_NO_RECONOCIDA`        | "Observación no reconocida: {texto}"                                      |
-| `TURNO_DISTINTO_CONFIG`            | "El turno informado difiere de la configuración"                          |
 
 Elección del aviso por exceso: si `realizada > 0` y `computada < realizada`, el motivo es `BAJO_UMBRAL` si `realizada < umbral`; si no, `SIN_AUTORIZACION_DIA` si `tope = 0`; si no, `EXCEDENTE_SOBRE_TOPE`. En `DOMINGO` y en `SABADO` no habilitado, si `realizada > 0` el aviso es siempre `TRABAJO_DOMINGO_SIN_AUTORIZACION` o `TRABAJO_SABADO_NO_HABILITADO`, sin importar la duración: no se usa `BAJO_UMBRAL`; se computa `0:00` y todo lo realizado queda para que decida el jefe. Excepción: con `LIC. ANUAL ORDINARIA` en un día que no es hábil normal (8.2), si el tope es cero y no corresponde `BAJO_UMBRAL`, se usa `SIN_AUTORIZACION_DIA` en lugar de los avisos específicos de domingo o sábado.
 
@@ -643,6 +646,10 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 13. Contingencia por la primera y la última marcación; el método sigue siendo `MAX_MIN_ESTIMADO`.
 14. En domingo y sábado no habilitado, el aviso específico no depende de la duración.
 15. Casos 26 a 29 del Anexo A.
+16. Por debajo del umbral el aviso es de bajo umbral, salvo domingo y sábado no habilitado (8.3).
+17. Un par completo tiene ingreso y salida cargados; un par sin extremos no cuenta como marcación (7.1).
+18. Se elimina `TURNO_DISTINTO_CONFIG`.
+19. La interfaz no guarda vigencias superpuestas; las horas de la configuración se validan al guardar y al leer (5.1).
 
 ---
 
