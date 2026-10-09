@@ -33,3 +33,7 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 4: finales es un objeto o Map de fecha a minutos. Cada valor tiene que cumplir 0 <= final <= Hs_Extra_Realizada; si no, RangeError. Una fecha de finales que no es del mes también lanza RangeError. modificado es booleano: Hs_Final distinto de Hs_Computada_Sistema.
 - Fase 4: una fecha del archivo fuera del período o repetida lanza Error y no elige fila. Vigencias superpuestas no rompen el cálculo del agente: se devuelve sin días ni totales, con bloqueante de codigo null y el mensaje del Error.
 - Fase 4: textoAviso(aviso, umbralMinutos) redacta la tabla de 10.2. BAJO_UMBRAL usa el umbral recibido. Un código desconocido lanza RangeError. Los bloqueantes no tienen texto.
+- Fase 5: la validación de esquemas devuelve { ok: true } o { ok: false, errores: string[] }. persistencia lanza Error con esos mensajes al leer o guardar.
+- Fase 5: las pruebas de carpeta usan un mock en memoria (crearDirectorioMemoria) con la misma forma que FileSystemDirectoryHandle; no abren el diálogo del navegador.
+- Fase 5: el criterio de aceptación es la ida y vuelta de los cinco JSON de la sección 5. emision-*.json queda para cuando se genere o importe el libro.
+- Fase 5: la pantalla en App.vue es mínima (cargar ejemplo, carpeta, exportar/importar, resumen). La interfaz de la sección 14 es la fase 8.
