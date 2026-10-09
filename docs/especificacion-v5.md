@@ -184,14 +184,14 @@ Los ejemplos usan datos sintéticos. Las horas se guardan como texto `"HH:MM"`.
 Reglas:
 
 - `legajo`, `dni` y `concepto` se usan en el informe y en la resolución de pago; no intervienen en el cálculo.
-- **Vigencia:** para calcular una fecha se usa la configuración cuya vigencia la contenga. Permite recalcular meses pasados con los valores de entonces. Si ninguna cubre la fecha, `AGENTE_SIN_CONFIGURACION` (bloqueante).
+- **Vigencia:** `vigencia_desde` y `vigencia_hasta` definen el período de las horas extras del agente. Para calcular una fecha se usa la configuración cuya vigencia la contenga. Permite recalcular meses pasados con los valores de entonces. Un día fuera de ese período se muestra con todas las magnitudes en `0:00`, sin aviso ni bloqueo, y no es editable. Todos los agentes del listado generan informe cada mes, aunque no tengan horas extras.
 - La interfaz no permite guardar configuraciones de un mismo agente con vigencias superpuestas.
 - **Topes propios:** cada agente tiene sus propios topes por tipo de día. No existen topes generales de respaldo. Un tope vacío se interpreta como `00:00`.
 - Al dar de alta o editar una configuración, la interfaz **exige completar todos los topes** (0 es válido) para que un valor faltante no pase inadvertido. El alta precarga `tope_lao_receso` con `08:00`.
 - **Sábado:** está habilitado solo si hay `sabado_inicio` y `sabado_fin`. Si falta alguno, no está habilitado. Si solo se carga una de las dos horas, la configuración es inválida: la interfaz no permite guardarla y el motor la trata como no habilitado.
 - `duracion_jornada` se conserva como dato explícito de control y se puede validar contra `horario_fin - horario_inicio`.
 - Las horas de la configuración se validan (formato `HH:MM`) al guardar y al leer los archivos JSON; el motor asume datos válidos.
-- Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre` y `alias`. Sin coincidencia única: `AGENTE_SIN_CONFIGURACION`.
+- Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre` y `alias`.
 
 ### 5.2. `grupos.json`
 
@@ -324,7 +324,7 @@ Horas no interpretables o fuera de `00:00-23:59`: `DATOS_HORARIOS_IMPOSIBLES` (b
 
 ```
 para cada fecha del mes:
-  cfg      = configuracion_vigente(agente, fecha)            // si no hay: bloqueante
+  cfg      = configuracion_vigente(agente, fecha)            // si no hay: magnitudes en 0:00, sin aviso ni bloqueo
   tipo     = clasificar_dia(fecha)                           // 3.3
   novedad  = reconocer_novedad(observacion)                  // 6.2
   trab     = tiempo_trabajado(marcaciones)                   // 7
@@ -395,9 +395,8 @@ importe              = techo( minutos_equivalentes * valor_hora_base / 60 )
 
 ### 10.1. Bloqueantes
 
-Impiden calcular la fecha afectada (o al agente completo, en el primer caso) hasta que se resuelvan:
+Impiden calcular la fecha afectada hasta que se resuelvan:
 
-- `AGENTE_SIN_CONFIGURACION` (afecta al agente completo; no se genera su hoja).
 - `NOVEDAD_DUPLICADA_EN_FECHA`.
 - `DATOS_HORARIOS_IMPOSIBLES`.
 
@@ -650,6 +649,8 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 17. Un par completo tiene ingreso y salida cargados; un par sin extremos no cuenta como marcación (7.1).
 18. Se elimina `TURNO_DISTINTO_CONFIG`.
 19. La interfaz no guarda vigencias superpuestas; las horas de la configuración se validan al guardar y al leer (5.1).
+20. Se elimina `AGENTE_SIN_CONFIGURACION`: todos los agentes del listado tienen configuración y generan informe cada mes.
+21. Un día fuera de la vigencia se muestra en `0:00`, sin aviso ni bloqueo, y no es editable.
 
 ---
 
@@ -664,7 +665,7 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 7. **Reconocimiento de novedades:** por coincidencia de palabras completas dentro de la observación (confirmado).
 8. **Segundos:** si el archivo trajera segundos, se truncan al minuto.
 9. **Límite de autorización:** el jefe puede fijar horas finales entre cero y lo realizado, nunca más que lo realizado.
-10. **Fechas bloqueadas:** se muestran en rojo y no editables; no se generan hojas de agentes sin configuración.
+10. **Fechas bloqueadas:** se muestran en rojo y no editables. Todos los agentes del listado generan informe cada mes.
 
 ---
 

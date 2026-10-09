@@ -24,3 +24,12 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Una hora de la configuración mal formada lanza RangeError: es un dato roto, no DATOS_HORARIOS_IMPOSIBLES, que queda reservado para las marcaciones. La validación al guardar y al leer corresponde a las fases 5 y 8.
 - La franja del sábado habilitado se cruza solo con [sabado_inicio, sabado_fin] y no se extiende pasada la medianoche.
 - TURNO_DISTINTO_CONFIG no se implementa.
+- Fase 4: liquidar({ minutosSimples, minutosDobles, valorHoraBase }) devuelve { minutosEquivalentes, importe }. El valor hora se lee como texto (String si llega número); coma y punto son separador decimal. El techo se hace una sola vez con BigInt.
+- Fase 4: identificarAgente(nombre, agentes) compara el nombre normalizado con nombre y alias y no mira activo. Cero o más de una coincidencia devuelven null.
+- Fase 4: calcularMes({ nombre, agentes, archivo, feriados, eventos, catalogo, finales }) devuelve { agente, periodo, dias, totales, bloqueantes, hayBloqueantes }. Cada día es el resultado de calcularDia más fecha y modificado. Si el agente no se identifica, dias y totales quedan en null y el bloqueante es AGENTE_SIN_CONFIGURACION con fecha null.
+- Fase 4: los totales son las celdas C5 a C10 en minutos enteros, más importe y el valorHoraBase usado. El valor hora es el de la última configuración que cubre algún día del mes. Si ninguna cubre un día, el importe queda null.
+- Un día sin configuración vigente no es bloqueante: calcularDia devuelve las magnitudes en 0, sin avisos, con editable false y bloqueante null.
+- calcularMes no bloquea al agente por días fuera de la vigencia. Esos días aportan 0 a los totales.
+- Fase 4: finales es un objeto o Map de fecha a minutos. Cada valor tiene que cumplir 0 <= final <= Hs_Extra_Realizada; si no, RangeError. Una fecha de finales que no es del mes también lanza RangeError. modificado es booleano: Hs_Final distinto de Hs_Computada_Sistema.
+- Fase 4: una fecha del archivo fuera del período o repetida lanza Error y no elige fila. Vigencias superpuestas no rompen el cálculo del agente: se devuelve sin días ni totales, con bloqueante de codigo null y el mensaje del Error.
+- Fase 4: textoAviso(aviso, umbralMinutos) redacta la tabla de 10.2. BAJO_UMBRAL usa el umbral recibido. Un código desconocido lanza RangeError. Los bloqueantes no tienen texto.

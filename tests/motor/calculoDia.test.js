@@ -666,15 +666,18 @@ describe("derivadas del texto", () => {
     expect(resultado.metodo).toBe("PARES_VALIDOS");
   });
 
-  it("una fecha sin configuración vigente es bloqueante", () => {
+  it("un día fuera de la vigencia queda en cero, sin aviso ni bloqueo", () => {
     const resultado = calcular({
       configuraciones: [cfgBase({ vigencia_desde: "2026-09-01" })],
       marcaciones: [par("08:00", "17:10")],
     });
-    expect(resultado.bloqueante).toBe("AGENTE_SIN_CONFIGURACION");
+    expect(resultado.bloqueante).toBeNull();
+    expect(resultado.Hs_Trab).toBe(0);
     expect(resultado.Hs_Extra_Realizada).toBe(0);
     expect(resultado.Hs_Computada_Sistema).toBe(0);
     expect(resultado.Hs_Excedente).toBe(0);
+    expect(resultado.Hs_Final).toBe(0);
+    expect(resultado.avisos).toEqual([]);
     expect(resultado.editable).toBe(false);
   });
 

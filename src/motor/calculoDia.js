@@ -18,7 +18,6 @@ import {
 const METODO_PARES = "PARES_VALIDOS";
 const METODO_ESTIMADO = "MAX_MIN_ESTIMADO";
 
-const BLOQUEO_SIN_CONFIGURACION = "AGENTE_SIN_CONFIGURACION";
 const BLOQUEO_NOVEDAD_DUPLICADA = "NOVEDAD_DUPLICADA_EN_FECHA";
 const BLOQUEO_HORARIO = "DATOS_HORARIOS_IMPOSIBLES";
 
@@ -405,6 +404,31 @@ export function reglasPorTipo(entrada) {
 }
 
 /**
+ * Día fuera del período de horas extras: se muestra en cero, sin aviso ni bloqueo.
+ *
+ * @param {string} tipo
+ * @returns {object}
+ */
+function diaFueraDeVigencia(tipo) {
+  return {
+    Hs_Trab: 0,
+    Hs_Extra_Realizada: 0,
+    Hs_No_Computable: 0,
+    Tope_Aplicable: 0,
+    Hs_Computada_Sistema: 0,
+    Hs_Excedente: 0,
+    Hs_Final: 0,
+    factor: FACTOR_SIMPLE,
+    tipo,
+    novedad: null,
+    metodo: null,
+    avisos: [],
+    bloqueante: null,
+    editable: false,
+  };
+}
+
+/**
  * @param {string} tipo
  * @param {object|null} novedad
  * @param {string} bloqueante
@@ -485,7 +509,7 @@ export function calcularDia(entrada) {
   const clasificacion = clasificarDia(entrada.fecha, entrada.feriados, entrada.eventos);
   const cfg = configuracionVigente(entrada.configuraciones, entrada.fecha);
   if (cfg === null) {
-    return diaBloqueado(clasificacion.tipo, null, BLOQUEO_SIN_CONFIGURACION);
+    return diaFueraDeVigencia(clasificacion.tipo);
   }
 
   const reconocimiento = reconocerNovedad(entrada.observacion, entrada.catalogo);
