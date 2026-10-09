@@ -75,19 +75,20 @@ datos/
 - Las marcaciones se normalizan al minuto. Si el archivo trajera segundos, se truncan al minuto.
 - Duración de un par: si `salida >= ingreso`, `salida - ingreso`; si `salida < ingreso`, hay cruce de medianoche y se suma 1440 antes de restar.
 - La salida de un par figura siempre en la fila del día de ingreso, aunque ocurra después de la medianoche (por ejemplo, ingreso 08:00 y salida 00:03 en la misma fila).
+- Un par pertenece por completo al día de su ingreso: todo su tiempo, incluido el posterior a la medianoche, se mide y se clasifica con el tipo de día y el tope del día de ingreso.
 - La conversión a horas decimales ocurre solo en la liquidación (sección 9).
 
 ### 3.2. Magnitudes de un día (nombres fijos)
 
-| Nombre | Significado |
-|---|---|
-| `Hs_Trab` | Tiempo efectivamente trabajado en el día. |
-| `Hs_Extra_Realizada` | Tiempo trabajado que, por el tipo de día, puede ser hora extra. Es lo que el agente hizo, esté o no autorizado. |
-| `Tope_Aplicable` | Horas autorizadas al agente para ese tipo de día. Un tope no definido vale `00:00`. |
-| `Hs_Computada_Sistema` | Lo que el sistema computa: depende del umbral y del tope. |
-| `Hs_Excedente` | `Hs_Extra_Realizada - Hs_Computada_Sistema`. Es lo que el jefe puede autorizar. |
-| `Hs_Final` | Lo que finalmente se computa. Empieza igual a `Hs_Computada_Sistema` y el jefe puede editarla. Siempre cumple `0 <= Hs_Final <= Hs_Extra_Realizada`. |
-| `Hs_No_Computable` | Tiempo trabajado que no puede ser extra (por ejemplo, fuera de la modalidad). Se muestra y no se contabiliza. |
+| Nombre                 | Significado                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Hs_Trab`              | Tiempo efectivamente trabajado en el día.                                                                                                            |
+| `Hs_Extra_Realizada`   | Tiempo trabajado que, por el tipo de día, puede ser hora extra. Es lo que el agente hizo, esté o no autorizado.                                      |
+| `Tope_Aplicable`       | Horas autorizadas al agente para ese tipo de día. Un tope no definido vale `00:00`.                                                                  |
+| `Hs_Computada_Sistema` | Lo que el sistema computa: depende del umbral y del tope.                                                                                            |
+| `Hs_Excedente`         | `Hs_Extra_Realizada - Hs_Computada_Sistema`. Es lo que el jefe puede autorizar.                                                                      |
+| `Hs_Final`             | Lo que finalmente se computa. Empieza igual a `Hs_Computada_Sistema` y el jefe puede editarla. Siempre cumple `0 <= Hs_Final <= Hs_Extra_Realizada`. |
+| `Hs_No_Computable`     | Tiempo trabajado que no puede ser extra (por ejemplo, la llegada anticipada, antes de `horario_inicio`). Se muestra y no se contabiliza.             |
 
 ### 3.3. Tipos de día y prioridad
 
@@ -104,9 +105,9 @@ Si un feriado cae en sábado o domingo, prevalece `FERIADO`. Feriados, asuetos y
 
 El tipo de día se sigue determinando con esta prioridad y se muestra en el informe. Excepción de cálculo: la `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día en las reglas de cálculo (ver 6.3 y 8.2).
 
-### 3.4. Un agente no parte sus horas extras
+### 3.4. Horas extras en días hábiles
 
-En días hábiles las horas extras se hacen exclusivamente antes o exclusivamente después de la jornada, según la modalidad del agente. Nunca ambas el mismo día.
+En días hábiles las horas extras se hacen siempre después de la jornada.
 
 ### 3.5. Una sola novedad por fecha
 
@@ -164,9 +165,7 @@ Los ejemplos usan datos sintéticos. Las horas se guardan como texto `"HH:MM"`.
           "horario_inicio": "08:00",
           "horario_fin": "14:30",
           "duracion_jornada": "06:30",
-          "modalidad_extra_habil": "DESPUES",
           "tope_extra_habil": "04:00",
-          "sabado_habilitado": false,
           "sabado_inicio": null,
           "sabado_fin": null,
           "sabado_tope": "00:00",
@@ -188,7 +187,7 @@ Reglas:
 - **Vigencia:** para calcular una fecha se usa la configuración cuya vigencia la contenga. Permite recalcular meses pasados con los valores de entonces. Si ninguna cubre la fecha, `AGENTE_SIN_CONFIGURACION` (bloqueante).
 - **Topes propios:** cada agente tiene sus propios topes por tipo de día. No existen topes generales de respaldo. Un tope vacío se interpreta como `00:00`.
 - Al dar de alta o editar una configuración, la interfaz **exige completar todos los topes** (0 es válido) para que un valor faltante no pase inadvertido. El alta precarga `tope_lao_receso` con `08:00`.
-- `modalidad_extra_habil`: `ANTES` o `DESPUES`.
+- **Sábado:** está habilitado solo si hay `sabado_inicio` y `sabado_fin`. Si falta alguno, no está habilitado. Si solo se carga una de las dos horas, la configuración es inválida: la interfaz no permite guardarla y el motor la trata como no habilitado.
 - `duracion_jornada` se conserva como dato explícito de control y se puede validar contra `horario_fin - horario_inicio`.
 - Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre` y `alias`. Sin coincidencia única: `AGENTE_SIN_CONFIGURACION`.
 
@@ -212,11 +211,27 @@ Reglas:
 ### 5.3. `calendario.json` y `eventos.json`
 
 ```json
-{ "feriados": [ { "fecha": "2026-08-17", "descripcion": "Paso a la Inmortalidad del Gral. San Martín" } ] }
+{
+  "feriados": [
+    {
+      "fecha": "2026-08-17",
+      "descripcion": "Paso a la Inmortalidad del Gral. San Martín"
+    }
+  ]
+}
 ```
 
 ```json
-{ "eventos": [ { "fecha": "2026-08-20", "tipo": "ASUETO", "descripcion": "…", "tope_especial": null } ] }
+{
+  "eventos": [
+    {
+      "fecha": "2026-08-20",
+      "tipo": "ASUETO",
+      "descripcion": "…",
+      "tope_especial": null
+    }
+  ]
+}
 ```
 
 `tipo` es `ASUETO` o `PARO`. `tope_especial` es opcional; si existe, **prevalece** sobre el tope del agente para esa fecha (salvo con `LIC. ANUAL ORDINARIA`, ver 8.2).
@@ -226,11 +241,23 @@ Reglas:
 ```json
 {
   "justificaciones": [
-    { "codigo": "LICENCIA_ANUAL_ORDINARIA", "descripcion": "LIC. ANUAL ORDINARIA", "clase": "ESPECIAL_LAO_RECESO" },
-    { "codigo": "AUSENTE_POR_ENFERMEDAD", "descripcion": "AUSENTE POR ENFERMEDAD", "clase": "COMPLETA" }
+    {
+      "codigo": "LICENCIA_ANUAL_ORDINARIA",
+      "descripcion": "LIC. ANUAL ORDINARIA",
+      "clase": "ESPECIAL_LAO_RECESO"
+    },
+    {
+      "codigo": "AUSENTE_POR_ENFERMEDAD",
+      "descripcion": "AUSENTE POR ENFERMEDAD",
+      "clase": "COMPLETA"
+    }
   ],
   "permisos": [
-    { "codigo": "PERMISO_MEDIA_JORNADA", "descripcion": "PERMISO MEDIA JORNADA", "jornada_exigible": "03:30" }
+    {
+      "codigo": "PERMISO_MEDIA_JORNADA",
+      "descripcion": "PERMISO MEDIA JORNADA",
+      "jornada_exigible": "03:30"
+    }
   ],
   "umbral_minimo": "00:50"
 }
@@ -261,7 +288,7 @@ Para comparar textos: pasar a mayúsculas, quitar tildes, reemplazar puntuación
 - `ESPECIAL_LAO_RECESO` (licencia anual ordinaria y receso invernal): `Jornada_Exigible = 00:00`; permite extras por razones de servicio.
 - Permiso parcial: la jornada exigible pasa a ser la del permiso (por ejemplo, 03:30 o 02:00) en lugar de la jornada normal.
 
-En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y no modifican el cálculo, con una excepción: la `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día. El sistema de origen la informa como días corridos, en la observación de todas las filas que cubre, incluidos sábados, domingos, feriados, asuetos y paros; por eso se reconoce fila por fila, sin mirar los días vecinos. En esas fechas se aplica la regla de `ESPECIAL_LAO_RECESO` de 8.2 con factor 1. `RECESO INVERNAL` y las justificaciones de clase `COMPLETA` no tienen esta excepción. En cada fecha rige una sola novedad (3.5): si una fecha de la licencia trae en cambio una justificación de clase `COMPLETA` (por ejemplo enfermedad o duelo), rige esa justificación.
+En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y no modifican el cálculo, con una excepción: la `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día. El sistema de origen la informa como días corridos, en la observación de todas las filas que cubre, incluidos sábados, domingos, feriados, asuetos y paros; por eso se reconoce fila por fila, sin mirar los días vecinos. En esas fechas se aplica la excepción de 8.2 (factor 1). `RECESO INVERNAL` y las justificaciones de clase `COMPLETA` no tienen esta excepción. En cada fecha rige una sola novedad (3.5): si una fecha de la licencia trae en cambio una justificación de clase `COMPLETA` (por ejemplo enfermedad o duelo), la licencia deja de regir en esa fecha y se aplica la regla general (supuesto 2): la justificación `COMPLETA` modifica el cálculo solo en `HABIL_NORMAL`.
 
 ---
 
@@ -271,13 +298,19 @@ En días que no son `HABIL_NORMAL` las novedades se conservan para auditoría y 
 
 `Hs_Trab = Σ duración(ingreso_k, salida_k)` sobre los pares completos (3.1).
 
-### 7.2. Regla de contingencia: MAX-MIN
+### 7.2. Regla de contingencia: primera y última marcación
 
-Si no se pueden formar pares completos y confiables: `Hs_Trab = MAX(marcaciones) - MIN(marcaciones)`. Se marca el método como `MAX_MIN_ESTIMADO` y se genera `MARCACIONES_INCOMPLETAS` (advertencia). El método normal es `PARES_VALIDOS`.
+Hay marcaciones incompletas cuando algún par tiene ingreso o salida vacíos (por ejemplo, 1, 3 o 5 marcaciones). Un par completo es un par con ingreso y salida.
+
+En ese caso `Hs_Trab` es la duración desde la primera hasta la última marcación, en el orden de las columnas, con cruce de medianoche (3.1). Se marca el método como `MAX_MIN_ESTIMADO` y se genera `MARCACIONES_INCOMPLETAS` (advertencia). El método normal es `PARES_VALIDOS`.
+
+Para el cálculo de 8.2, el intervalo trabajado es único: de la primera a la última marcación.
+
+Con una sola marcación, `Hs_Trab = 0:00` y se genera el mismo aviso.
 
 ### 7.3. Datos imposibles
 
-Horas ilegibles o inconsistentes: `DATOS_HORARIOS_IMPOSIBLES` (bloqueante para esa fecha).
+Horas no interpretables o fuera de `00:00-23:59`: `DATOS_HORARIOS_IMPOSIBLES` (bloqueante para esa fecha). Un par con salida igual al ingreso no bloquea: dura `0`.
 
 ---
 
@@ -302,19 +335,19 @@ para cada fecha del mes:
 
 ### 8.2. Reglas por tipo de día (`reglas_por_tipo`)
 
-**Excepción: `LIC. ANUAL ORDINARIA` en días que no son hábiles normales.** Si la fecha tiene la novedad `LIC. ANUAL ORDINARIA` y su tipo de día es `FERIADO`, `ASUETO`, `PARO`, `SABADO` o `DOMINGO`: `realizada = trab`, `tope = cfg.tope_lao_receso`, `factor = 1`, sin modalidad ni franja y sin tiempo no computable. La licencia prevalece sobre el tipo de día, incluido el `tope_especial` de un evento: en `ASUETO` o `PARO` se usa `cfg.tope_lao_receso`, no el `tope_especial`. En `HABIL_NORMAL` rige la regla de `ESPECIAL_LAO_RECESO` de más abajo, que da el mismo resultado. No se generan los avisos `TRABAJO_DOMINGO_SIN_AUTORIZACION` ni `TRABAJO_SABADO_NO_HABILITADO`; si `tope_lao_receso` fuera `00:00`, corresponde `SIN_AUTORIZACION_DIA`. Las reglas por tipo de día que siguen se aplican cuando no rige esta excepción.
+**Excepción: `LIC. ANUAL ORDINARIA` en días que no son hábiles normales.** Si la fecha tiene la novedad `LIC. ANUAL ORDINARIA` y su tipo de día es `FERIADO`, `ASUETO`, `PARO`, `SABADO` o `DOMINGO`: `realizada = trab`, `tope = cfg.tope_lao_receso`, `factor = 1`, sin franja y sin tiempo no computable. La licencia prevalece sobre el tipo de día, incluido el `tope_especial` de un evento: en `ASUETO` o `PARO` se usa `cfg.tope_lao_receso`, no el `tope_especial`. En `HABIL_NORMAL` rige la regla de `ESPECIAL_LAO_RECESO` de más abajo, que da el mismo resultado. No se generan los avisos `TRABAJO_DOMINGO_SIN_AUTORIZACION` ni `TRABAJO_SABADO_NO_HABILITADO`; si `tope_lao_receso` fuera `00:00`, corresponde `SIN_AUTORIZACION_DIA`, salvo que corresponda `BAJO_UMBRAL` (10.2). Las reglas por tipo de día que siguen se aplican cuando no rige esta excepción.
 
 **`HABIL_NORMAL`**
 
 - Novedad `COMPLETA`: `realizada = 0`, `tope = 0`. Si `trab > 0`, advertencia `MARCACIONES_EN_DIA_JUSTIFICADO`.
 - Novedad `ESPECIAL_LAO_RECESO`: `realizada = trab`, `tope = cfg.tope_lao_receso`.
-- Permiso parcial: `realizada = max(0, trab - jornada_exigible_reducida)`, en cualquier momento del día (sin modalidad ni franja); `tope = cfg.tope_extra_habil`. Si `trab <= jornada_exigible_reducida`, no hay extras ni aviso.
-- Sin novedad: se calcula la **intersección** entre los intervalos trabajados y la ventana de la modalidad. `ANTES`: tiempo anterior a `horario_inicio`. `DESPUES`: tiempo posterior a `horario_fin`. `realizada` es esa intersección. El tiempo trabajado del otro lado de la franja es `no_computable`: se muestra y **no genera advertencia**. `tope = cfg.tope_extra_habil`.
+- Permiso parcial: `realizada = max(0, trab - jornada_exigible_reducida)`, en cualquier momento del día (sin franja); `tope = cfg.tope_extra_habil`. Si `trab <= jornada_exigible_reducida`, no hay extras ni aviso.
+- Sin novedad: `realizada` es el tiempo trabajado posterior a `horario_fin`, hasta la salida del par aunque pase de la medianoche (3.1); se calcula como la **intersección** entre los intervalos trabajados y ese tramo. El tiempo trabajado antes de `horario_inicio` es `no_computable`: se muestra y **no genera advertencia**. `tope = cfg.tope_extra_habil`.
 
 **`SABADO`**
 
-- Habilitado: `realizada` = tiempo trabajado dentro de `[sabado_inicio, sabado_fin]`; el tiempo fuera es `no_computable` (se muestra, sin advertencia); `tope = cfg.sabado_tope`.
-- No habilitado: `realizada = trab`, `tope = 0`. Si `trab > 0`, advertencia `TRABAJO_SABADO_NO_HABILITADO`.
+- Habilitado: tiene `sabado_inicio` y `sabado_fin`. `realizada` = tiempo trabajado dentro de `[sabado_inicio, sabado_fin]`; el tiempo fuera es `no_computable` (se muestra, sin advertencia); `tope = cfg.sabado_tope`.
+- No habilitado: falta alguna. `realizada = trab`, `tope = 0`. Si `trab > 0`, advertencia `TRABAJO_SABADO_NO_HABILITADO`.
 
 **`DOMINGO`**: `realizada = trab`, `tope = 0`. Si `trab > 0`, advertencia `TRABAJO_DOMINGO_SIN_AUTORIZACION`. El jefe decide si lo autoriza.
 
@@ -370,21 +403,21 @@ Una fecha bloqueada aparece en el informe en rojo, con `Realizada = 0` y no edit
 
 Se calcula normalmente y se marca. El aviso se redacta en lenguaje llano, para el jefe:
 
-| Código | Texto del aviso |
-|---|---|
-| `EXCEDENTE_SOBRE_TOPE` | "Realizó {realizada}, autorizadas {tope}: {excedente} para autorizar" |
-| `SIN_AUTORIZACION_DIA` | "Sin horas autorizadas para este tipo de día: {realizada} para autorizar" |
-| `BAJO_UMBRAL` | "Menos de 0:50: no se computa" |
-| `TRABAJO_DOMINGO_SIN_AUTORIZACION` | "Trabajó en domingo: {realizada} para autorizar" |
-| `TRABAJO_SABADO_NO_HABILITADO` | "Trabajó en sábado no habilitado: {realizada} para autorizar" |
-| `MARCACIONES_EN_DIA_JUSTIFICADO` | "Hay marcaciones en un día justificado ({novedad})" |
-| `MARCACIONES_INCOMPLETAS` | "Marcaciones incompletas: horas estimadas" |
-| `OBSERVACION_NO_RECONOCIDA` | "Observación no reconocida: {texto}" |
-| `TURNO_DISTINTO_CONFIG` | "El turno informado difiere de la configuración" |
+| Código                             | Texto del aviso                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `EXCEDENTE_SOBRE_TOPE`             | "Realizó {realizada}, autorizadas {tope}: {excedente} para autorizar"     |
+| `SIN_AUTORIZACION_DIA`             | "Sin horas autorizadas para este tipo de día: {realizada} para autorizar" |
+| `BAJO_UMBRAL`                      | "Menos de 0:50: no se computa"                                            |
+| `TRABAJO_DOMINGO_SIN_AUTORIZACION` | "Trabajó en domingo: {realizada} para autorizar"                          |
+| `TRABAJO_SABADO_NO_HABILITADO`     | "Trabajó en sábado no habilitado: {realizada} para autorizar"             |
+| `MARCACIONES_EN_DIA_JUSTIFICADO`   | "Hay marcaciones en un día justificado ({novedad})"                       |
+| `MARCACIONES_INCOMPLETAS`          | "Marcaciones incompletas: horas estimadas"                                |
+| `OBSERVACION_NO_RECONOCIDA`        | "Observación no reconocida: {texto}"                                      |
+| `TURNO_DISTINTO_CONFIG`            | "El turno informado difiere de la configuración"                          |
 
-Elección del aviso por exceso: si `realizada > 0` y `computada < realizada`, el motivo es `BAJO_UMBRAL` si `realizada < umbral`; si no, `SIN_AUTORIZACION_DIA` (o el aviso específico de domingo o sábado) si `tope = 0`; si no, `EXCEDENTE_SOBRE_TOPE`. Excepción: con `LIC. ANUAL ORDINARIA` en un día que no es hábil normal (8.2), si el tope es cero se usa siempre `SIN_AUTORIZACION_DIA`, nunca los avisos específicos de domingo o sábado.
+Elección del aviso por exceso: si `realizada > 0` y `computada < realizada`, el motivo es `BAJO_UMBRAL` si `realizada < umbral`; si no, `SIN_AUTORIZACION_DIA` si `tope = 0`; si no, `EXCEDENTE_SOBRE_TOPE`. En `DOMINGO` y en `SABADO` no habilitado, si `realizada > 0` el aviso es siempre `TRABAJO_DOMINGO_SIN_AUTORIZACION` o `TRABAJO_SABADO_NO_HABILITADO`, sin importar la duración: no se usa `BAJO_UMBRAL`; se computa `0:00` y todo lo realizado queda para que decida el jefe. Excepción: con `LIC. ANUAL ORDINARIA` en un día que no es hábil normal (8.2), si el tope es cero y no corresponde `BAJO_UMBRAL`, se usa `SIN_AUTORIZACION_DIA` en lugar de los avisos específicos de domingo o sábado.
 
-El tiempo `no_computable` por modalidad o por franja de sábado se muestra pero **no genera aviso**.
+El tiempo `no_computable` (llegada anticipada en días hábiles, o fuera de la franja en sábado habilitado) se muestra pero **no genera aviso**.
 
 ---
 
@@ -402,44 +435,44 @@ Un único libro por grupo y mes, llamado `{Grupo} - {MM}-{AAAA}.xlsx` (por ejemp
 
 Los totales están **arriba** de la tabla, en celdas fijas, para que su posición no dependa de los días del mes.
 
-| Celda | Contenido |
-|---|---|
-| `A1` | Título: `INFORME DE HORAS EXTRAS - {MES}/{AÑO}` |
-| `A2` / `B2` | `Agente:` / nombre |
-| `D2` / `E2` | `Legajo:` / legajo |
-| `G2` / `H2` | `DNI:` / DNI |
-| `A3` / `B3` | `Concepto:` / concepto |
-| `D3` / `E3` | `Grupo:` / nombre del grupo |
-| `G3` / `H3` | `Valor hora:` / `valor_hora_base` |
-| `A5` / `C5` | `Hs. extra realizadas` / total |
-| `A6` / `C6` | `Hs. computadas por el sistema` / total |
-| `A7` / `C7` | `Hs. finales simples` / total |
-| `A8` / `C8` | `Hs. finales dobles` / total |
-| `A9` / `C9` | `Hs. finales equivalentes` / total |
-| `A10` / `C10` | `Importe` / total |
+| Celda         | Contenido                                       |
+| ------------- | ----------------------------------------------- |
+| `A1`          | Título: `INFORME DE HORAS EXTRAS - {MES}/{AÑO}` |
+| `A2` / `B2`   | `Agente:` / nombre                              |
+| `D2` / `E2`   | `Legajo:` / legajo                              |
+| `G2` / `H2`   | `DNI:` / DNI                                    |
+| `A3` / `B3`   | `Concepto:` / concepto                          |
+| `D3` / `E3`   | `Grupo:` / nombre del grupo                     |
+| `G3` / `H3`   | `Valor hora:` / `valor_hora_base`               |
+| `A5` / `C5`   | `Hs. extra realizadas` / total                  |
+| `A6` / `C6`   | `Hs. computadas por el sistema` / total         |
+| `A7` / `C7`   | `Hs. finales simples` / total                   |
+| `A8` / `C8`   | `Hs. finales dobles` / total                    |
+| `A9` / `C9`   | `Hs. finales equivalentes` / total              |
+| `A10` / `C10` | `Importe` / total                               |
 
 Fila 12: encabezados de la tabla. Filas 13 en adelante: **una fila por cada día del mes**, incluidos los días sin trabajo, para que el jefe vea el mes completo. Se congela el encabezado.
 
 Columnas de la tabla diaria:
 
-| Col. | Contenido | Editable |
-|---|---|---|
-| A | Fecha | No |
-| B | Día de la semana | No |
-| C | Tipo de día | No |
-| D | Turno informado | No |
-| E a J | Ingreso 1, Salida 1, Ingreso 2, Salida 2, Ingreso 3, Salida 3 | No |
-| K | Observación original | No |
-| L | Hs. trabajadas | No |
-| M | Hs. no computables | No |
-| N | Hs. extra realizadas | No |
-| O | Hs. autorizadas (tope aplicable) | No |
-| P | Hs. computadas (sistema) | No |
-| Q | Excedente | No |
-| R | Factor (1 o 2) | No |
-| S | **Hs. finales** | **Sí** |
-| T | Modificado | No |
-| U | Aviso | No |
+| Col.  | Contenido                                                     | Editable |
+| ----- | ------------------------------------------------------------- | -------- |
+| A     | Fecha                                                         | No       |
+| B     | Día de la semana                                              | No       |
+| C     | Tipo de día                                                   | No       |
+| D     | Turno informado                                               | No       |
+| E a J | Ingreso 1, Salida 1, Ingreso 2, Salida 2, Ingreso 3, Salida 3 | No       |
+| K     | Observación original                                          | No       |
+| L     | Hs. trabajadas                                                | No       |
+| M     | Hs. no computables                                            | No       |
+| N     | Hs. extra realizadas                                          | No       |
+| O     | Hs. autorizadas (tope aplicable)                              | No       |
+| P     | Hs. computadas (sistema)                                      | No       |
+| Q     | Excedente                                                     | No       |
+| R     | Factor (1 o 2)                                                | No       |
+| S     | **Hs. finales**                                               | **Sí**   |
+| T     | Modificado                                                    | No       |
+| U     | Aviso                                                         | No       |
 
 Las horas se guardan como valores de hora de Excel (fracción de día = `minutos / 1440`) con formato `[h]:mm`.
 
@@ -497,7 +530,7 @@ Replica el formato de la planilla de consulta mensual.
 Contiene:
 
 - `codigo_emision` (identificador único de esta generación), fecha y hora de generación, período, grupo, versión de la especificación (5.1) y versión del motor.
-- Una tabla con una fila por agente: `agente_id`, nombre de la hoja, legajo y la configuración vigente aplicada (horario, modalidad, topes, valor hora). Así el libro es auditable aun sin el programa.
+- Una tabla con una fila por agente: `agente_id`, nombre de la hoja, legajo y la configuración vigente aplicada (horario, topes, valor hora). Así el libro es auditable aun sin el programa.
 
 ---
 
@@ -523,7 +556,6 @@ Por cada agente, fecha y emisión se conserva en `emision-<codigo>.json`:
 - jornada normal y jornada exigible;
 - marcaciones originales;
 - `Hs_Trab` y método (`PARES_VALIDOS` o `MAX_MIN_ESTIMADO`);
-- modalidad extra;
 - `Hs_Extra_Realizada`, `Hs_No_Computable`, `Tope_Aplicable`, `Hs_Computada_Sistema`, `Hs_Excedente`;
 - umbral aplicado y factor;
 - `Hs_Final` (inicial y, tras importar, la editada);
@@ -545,18 +577,18 @@ Por cada agente, fecha y emisión se conserva en `emision-<codigo>.json`:
 
 Cada fase termina con pruebas en verde y se confirma antes de avanzar.
 
-| Fase | Contenido | Criterio de aceptación |
-|---|---|---|
-| 0 | Esqueleto: Vite con `vite-plugin-singlefile`, Vitest, carpetas. | El HTML generado se abre con doble clic y ejecuta una prueba trivial. |
-| 1 | Utilidades de tiempo (parseo, formato, duración con cruce de medianoche, intersección de intervalos) y normalización de texto. | Pruebas unitarias, incluido el caso 17 del Anexo A. |
-| 2 | Clasificación del día y reconocimiento de novedades. | Prioridad de tipos de día; reconocimiento por descripción; duplicados detectados. |
-| 3 | Cálculo diario (secciones 7 y 8). | Casos 1 a 24 del Anexo A. |
-| 4 | Cálculo mensual por agente, liquidación (9) y avisos (10). | Casos de liquidación del Anexo A. |
-| 5 | Persistencia JSON con File System Access API y alternativa manual. | Ida y vuelta de todos los archivos de la sección 5. |
-| 6 | Importación del Excel exportado, con el archivo real anonimizado. | Producir la estructura de la sección 4 desde un archivo real. |
-| 7 | Generación del libro con ExcelJS (sección 11). | Abierto en Excel: fórmulas correctas, protección, validación, colores, impresión y valores de caché. |
-| 8 | Interfaz (sección 14). | Flujo completo de un mes con datos sintéticos. |
-| 9 | Importar el libro devuelto (sección 12). | Detecta emisión distinta, valores fuera de rango y totales alterados. |
+| Fase | Contenido                                                                                                                      | Criterio de aceptación                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| 0    | Esqueleto: Vite con `vite-plugin-singlefile`, Vitest, carpetas.                                                                | El HTML generado se abre con doble clic y ejecuta una prueba trivial.                                |
+| 1    | Utilidades de tiempo (parseo, formato, duración con cruce de medianoche, intersección de intervalos) y normalización de texto. | Pruebas unitarias, incluido el caso 17 del Anexo A.                                                  |
+| 2    | Clasificación del día y reconocimiento de novedades.                                                                           | Prioridad de tipos de día; reconocimiento por descripción; duplicados detectados.                    |
+| 3    | Cálculo diario (secciones 7 y 8).                                                                                              | Casos 1 a 29 del Anexo A.                                                                            |
+| 4    | Cálculo mensual por agente, liquidación (9) y avisos (10).                                                                     | Casos de liquidación del Anexo A.                                                                    |
+| 5    | Persistencia JSON con File System Access API y alternativa manual.                                                             | Ida y vuelta de todos los archivos de la sección 5.                                                  |
+| 6    | Importación del Excel exportado, con el archivo real anonimizado.                                                              | Producir la estructura de la sección 4 desde un archivo real.                                        |
+| 7    | Generación del libro con ExcelJS (sección 11).                                                                                 | Abierto en Excel: fórmulas correctas, protección, validación, colores, impresión y valores de caché. |
+| 8    | Interfaz (sección 14).                                                                                                         | Flujo completo de un mes con datos sintéticos.                                                       |
+| 9    | Importar el libro devuelto (sección 12).                                                                                       | Detecta emisión distinta, valores fuera de rango y totales alterados.                                |
 
 Estructura de código sugerida:
 
@@ -603,6 +635,14 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 5. `LIC. ANUAL ORDINARIA` prevalece sobre el tipo de día.
 6. Casos 20 a 24 del Anexo A.
 7. Con `LIC. ANUAL ORDINARIA`, `tope_lao_receso` prevalece sobre el `tope_especial` de un asueto o paro.
+8. Un par pertenece por completo al día de su ingreso; el tiempo posterior a horario_fin incluye lo posterior a la medianoche.
+9. Caso 25 del Anexo A.
+10. Retoques de redacción: referencia de 6.3 a la excepción de 8.2, justificación `COMPLETA` dentro de una licencia y 10.2 sin el "siempre".
+11. Se elimina la modalidad `ANTES` y el campo `modalidad_extra_habil`: las horas extras de días hábiles se hacen siempre después de la jornada.
+12. Se elimina `sabado_habilitado`: el sábado está habilitado solo si hay `sabado_inicio` y `sabado_fin`.
+13. Contingencia por la primera y la última marcación; el método sigue siendo `MAX_MIN_ESTIMADO`.
+14. En domingo y sábado no habilitado, el aviso específico no depende de la duración.
+15. Casos 26 a 29 del Anexo A.
 
 ---
 
@@ -623,57 +663,62 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 
 ## ANEXO A. CASOS DE PRUEBA
 
-Salvo indicación, el agente tiene: franja `08:00-14:30`, modalidad `DESPUES`, `tope_extra_habil = 04:00`, `tope_feriado = 04:00`, `tope_asueto = 04:00`, `tope_lao_receso = 08:00`, sábado no habilitado, umbral `00:50`.
+Salvo indicación, el agente tiene: franja `08:00-14:30`, `tope_extra_habil = 04:00`, `tope_feriado = 04:00`, `tope_asueto = 04:00`, `tope_lao_receso = 08:00`, sábado no habilitado, umbral `00:50`.
 
 ### A.1. Cálculo diario
 
-| # | Caso | Datos | Realizada | Autorizada | Computada | Excedente | Aviso |
-|---|---|---|---|---|---|---|---|
-| 1 | Hábil, después | 08:00-17:10 | 2:40 | 4:00 | 2:40 | 0:00 | ninguno |
-| 2 | Hábil, antes (modalidad `ANTES`) | 07:05-14:30 | 0:55 | 4:00 | 0:55 | 0:00 | ninguno |
-| 3 | Bajo el umbral | 08:00-15:15 | 0:45 | 4:00 | 0:00 | 0:45 | `BAJO_UMBRAL` |
-| 4 | Umbral exacto | 08:00-15:20 | 0:50 | 4:00 | 0:50 | 0:00 | ninguno |
-| 5 | Fuera de modalidad (`ANTES`) | 07:00-16:00 | 1:00 (no computable 1:30) | 4:00 | 1:00 | 0:00 | ninguno |
-| 6 | Excede el tope | 08:00-21:30 | 7:00 | 4:00 | 4:00 | 3:00 | `EXCEDENTE_SOBRE_TOPE` |
-| 7 | Permiso media jornada | 08:00-13:00 (exigible 3:30) | 1:30 | 4:00 | 1:30 | 0:00 | ninguno |
-| 8 | Permiso, bajo umbral | trabajó 4:10 | 0:40 | 4:00 | 0:00 | 0:40 | `BAJO_UMBRAL` |
-| 9 | Permiso, sin extra | trabajó 3:00 | 0:00 | 4:00 | 0:00 | 0:00 | ninguno |
-| 10 | Feriado con exceso (factor 2) | trabajó 8:00 | 8:00 | 4:00 | 4:00 | 4:00 | `EXCEDENTE_SOBRE_TOPE` |
-| 11 | Feriado sin tope definido (`tope_feriado = 00:00`) | trabajó 3:00 | 3:00 | 0:00 | 0:00 | 3:00 | `SIN_AUTORIZACION_DIA` |
-| 12 | Domingo | trabajó 3:00 | 3:00 | 0:00 | 0:00 | 3:00 | `TRABAJO_DOMINGO_SIN_AUTORIZACION` |
-| 13 | Sábado habilitado (franja 08:00-12:00, tope 4:00) | 08:00-13:00 | 4:00 (no computable 1:00) | 4:00 | 4:00 | 0:00 | ninguno |
-| 14 | Sábado no habilitado | trabajó 3:00 | 3:00 | 0:00 | 0:00 | 3:00 | `TRABAJO_SABADO_NO_HABILITADO` |
-| 15 | Licencia anual ordinaria con trabajo | novedad `LIC. ANUAL ORDINARIA` (día hábil); trabajó 5:00 | 5:00 | 8:00 | 5:00 | 0:00 | ninguno |
-| 16 | Justificación común con marcaciones | `AUSENTE POR ENFERMEDAD`, 08:00-12:00 | 0:00 | 0:00 | 0:00 | 0:00 | `MARCACIONES_EN_DIA_JUSTIFICADO` |
-| 17 | Cruce de medianoche | 22:00-01:30 | `Hs_Trab = 3:30` | | | | |
-| 18 | Asueto con tope especial 02:00 | trabajó 3:00 | 3:00 | 2:00 | 2:00 | 1:00 | `EXCEDENTE_SOBRE_TOPE` |
-| 19 | Dos novedades en la misma fecha | | | | | | bloqueante `NOVEDAD_DUPLICADA_EN_FECHA` |
-| 20 | Licencia anual ordinaria en feriado (factor 1, no 2) | novedad `LIC. ANUAL ORDINARIA`; trabajó 5:00 | 5:00 | 8:00 | 5:00 | 0:00 | ninguno |
-| 21 | Licencia anual ordinaria en sábado no habilitado | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
-| 22 | Licencia anual ordinaria en domingo | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
-| 23 | Licencia anual ordinaria en feriado con exceso (factor 1) | novedad `LIC. ANUAL ORDINARIA`; trabajó 9:00 | 9:00 | 8:00 | 8:00 | 1:00 | `EXCEDENTE_SOBRE_TOPE` |
-| 24 | Licencia anual ordinaria en asueto con tope especial 02:00 (prevalece `tope_lao_receso`) | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00 | 3:00 | 8:00 | 3:00 | 0:00 | ninguno |
+| #   | Caso                                                                                     | Datos                                                    | Realizada                 | Autorizada | Computada | Excedente | Aviso                                   |
+| --- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------- | ---------- | --------- | --------- | --------------------------------------- |
+| 1   | Hábil, después                                                                           | 08:00-17:10                                              | 2:40                      | 4:00       | 2:40      | 0:00      | ninguno                                 |
+| 2   | Llegada anticipada (antes de la franja)                                                  | 07:05-14:30                                              | 0:00 (no computable 0:55) | 4:00       | 0:00      | 0:00      | ninguno                                 |
+| 3   | Bajo el umbral                                                                           | 08:00-15:15                                              | 0:45                      | 4:00       | 0:00      | 0:45      | `BAJO_UMBRAL`                           |
+| 4   | Umbral exacto                                                                            | 08:00-15:20                                              | 0:50                      | 4:00       | 0:50      | 0:00      | ninguno                                 |
+| 5   | Llegada anticipada y salida tarde                                                        | 07:00-16:00                                              | 1:30 (no computable 1:00) | 4:00       | 1:30      | 0:00      | ninguno                                 |
+| 6   | Excede el tope                                                                           | 08:00-21:30                                              | 7:00                      | 4:00       | 4:00      | 3:00      | `EXCEDENTE_SOBRE_TOPE`                  |
+| 7   | Permiso media jornada                                                                    | 08:00-13:00 (exigible 3:30)                              | 1:30                      | 4:00       | 1:30      | 0:00      | ninguno                                 |
+| 8   | Permiso, bajo umbral                                                                     | trabajó 4:10                                             | 0:40                      | 4:00       | 0:00      | 0:40      | `BAJO_UMBRAL`                           |
+| 9   | Permiso, sin extra                                                                       | trabajó 3:00                                             | 0:00                      | 4:00       | 0:00      | 0:00      | ninguno                                 |
+| 10  | Feriado con exceso (factor 2)                                                            | trabajó 8:00                                             | 8:00                      | 4:00       | 4:00      | 4:00      | `EXCEDENTE_SOBRE_TOPE`                  |
+| 11  | Feriado sin tope definido (`tope_feriado = 00:00`)                                       | trabajó 3:00                                             | 3:00                      | 0:00       | 0:00      | 3:00      | `SIN_AUTORIZACION_DIA`                  |
+| 12  | Domingo                                                                                  | trabajó 3:00                                             | 3:00                      | 0:00       | 0:00      | 3:00      | `TRABAJO_DOMINGO_SIN_AUTORIZACION`      |
+| 13  | Sábado habilitado (franja 08:00-12:00, tope 4:00)                                        | 08:00-13:00                                              | 4:00 (no computable 1:00) | 4:00       | 4:00      | 0:00      | ninguno                                 |
+| 14  | Sábado no habilitado                                                                     | trabajó 3:00                                             | 3:00                      | 0:00       | 0:00      | 3:00      | `TRABAJO_SABADO_NO_HABILITADO`          |
+| 15  | Licencia anual ordinaria con trabajo                                                     | novedad `LIC. ANUAL ORDINARIA` (día hábil); trabajó 5:00 | 5:00                      | 8:00       | 5:00      | 0:00      | ninguno                                 |
+| 16  | Justificación común con marcaciones                                                      | `AUSENTE POR ENFERMEDAD`, 08:00-12:00                    | 0:00                      | 0:00       | 0:00      | 0:00      | `MARCACIONES_EN_DIA_JUSTIFICADO`        |
+| 17  | Cruce de medianoche                                                                      | 22:00-01:30                                              | `Hs_Trab = 3:30`          |            |           |           |                                         |
+| 18  | Asueto con tope especial 02:00                                                           | trabajó 3:00                                             | 3:00                      | 2:00       | 2:00      | 1:00      | `EXCEDENTE_SOBRE_TOPE`                  |
+| 19  | Dos novedades en la misma fecha                                                          |                                                          |                           |            |           |           | bloqueante `NOVEDAD_DUPLICADA_EN_FECHA` |
+| 20  | Licencia anual ordinaria en feriado (factor 1, no 2)                                     | novedad `LIC. ANUAL ORDINARIA`; trabajó 5:00             | 5:00                      | 8:00       | 5:00      | 0:00      | ninguno                                 |
+| 21  | Licencia anual ordinaria en sábado no habilitado                                         | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00             | 3:00                      | 8:00       | 3:00      | 0:00      | ninguno                                 |
+| 22  | Licencia anual ordinaria en domingo                                                      | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00             | 3:00                      | 8:00       | 3:00      | 0:00      | ninguno                                 |
+| 23  | Licencia anual ordinaria en feriado con exceso (factor 1)                                | novedad `LIC. ANUAL ORDINARIA`; trabajó 9:00             | 9:00                      | 8:00       | 8:00      | 1:00      | `EXCEDENTE_SOBRE_TOPE`                  |
+| 24  | Licencia anual ordinaria en asueto con tope especial 02:00 (prevalece `tope_lao_receso`) | novedad `LIC. ANUAL ORDINARIA`; trabajó 3:00             | 3:00                      | 8:00       | 3:00      | 0:00      | ninguno                                 |
+| 25  | Hábil, después, con salida pasada la medianoche                                          | 18:00-00:03                                              | 6:03                      | 4:00       | 4:00      | 2:03      | `EXCEDENTE_SOBRE_TOPE`                  |
+| 26  | Domingo con 0:30                                                                         | trabajó 0:30                                             | 0:30                      | 0:00       | 0:00      | 0:30      | `TRABAJO_DOMINGO_SIN_AUTORIZACION`      |
+| 27  | Hábil, tres marcaciones                                                                  | 08:00, 14:30, 18:00; `MAX_MIN_ESTIMADO`; `Hs_Trab = 10:00` | 3:30                   | 4:00       | 3:30      | 0:00      | `MARCACIONES_INCOMPLETAS`               |
+| 28  | Hábil, tres marcaciones con cruce de medianoche                                         | 18:00, 23:00, 00:03; `MAX_MIN_ESTIMADO`; `Hs_Trab = 6:03` | 6:03                    | 4:00       | 4:00      | 2:03      | `MARCACIONES_INCOMPLETAS` y `EXCEDENTE_SOBRE_TOPE` |
+| 29  | Hábil, una sola marcación                                                                | 08:00; `Hs_Trab = 0:00`                                  | 0:00                      | 4:00       | 0:00      | 0:00      | `MARCACIONES_INCOMPLETAS`               |
 
 ### A.2. Liquidación
 
-| # | Datos | Resultado |
-|---|---|---|
-| L1 | 5:30 simples, valor hora 1234,50 | importe 6789,75, liquidado **6790** |
-| L2 | 3:00 simples + 1:00 dobles, valor hora 4500 | 5:00 equivalentes, importe **22500** |
-| L3 | 0:00 | importe 0 |
-| L4 | 1 minuto, valor hora 100 | 1,67, liquidado **2** |
+| #   | Datos                                       | Resultado                            |
+| --- | ------------------------------------------- | ------------------------------------ |
+| L1  | 5:30 simples, valor hora 1234,50            | importe 6789,75, liquidado **6790**  |
+| L2  | 3:00 simples + 1:00 dobles, valor hora 4500 | 5:00 equivalentes, importe **22500** |
+| L3  | 0:00                                        | importe 0                            |
+| L4  | 1 minuto, valor hora 100                    | 1,67, liquidado **2**                |
 
 ### A.3. Libro
 
-| # | Verificación |
-|---|---|
-| B1 | Los totales están en `C5:C10` de cada hoja, para meses de 28, 30 y 31 días. |
-| B2 | Cambiar `S` en una fila recalcula `C7:C10`, el `Resumen` y marca `T = "SÍ"`. |
-| B3 | `S` rechaza valores mayores que `N` o negativos. |
-| B4 | `S` está bloqueada en filas con `N = 0` y todo el resto de la hoja está protegido. |
-| B5 | `Resumen!F` coincide con `C9` de cada hoja y `G` con `ROUNDUP` por agente. |
-| B6 | El control de horas máximas avisa cuando el total las supera. |
-| B7 | `Control` contiene `codigo_emision` y la configuración aplicada de cada agente. |
+| #   | Verificación                                                                       |
+| --- | ---------------------------------------------------------------------------------- |
+| B1  | Los totales están en `C5:C10` de cada hoja, para meses de 28, 30 y 31 días.        |
+| B2  | Cambiar `S` en una fila recalcula `C7:C10`, el `Resumen` y marca `T = "SÍ"`.       |
+| B3  | `S` rechaza valores mayores que `N` o negativos.                                   |
+| B4  | `S` está bloqueada en filas con `N = 0` y todo el resto de la hoja está protegido. |
+| B5  | `Resumen!F` coincide con `C9` de cada hoja y `G` con `ROUNDUP` por agente.         |
+| B6  | El control de horas máximas avisa cuando el total las supera.                      |
+| B7  | `Control` contiene `codigo_emision` y la configuración aplicada de cada agente.    |
 
 ---
 
@@ -691,7 +736,7 @@ Clase `ESPECIAL_LAO_RECESO` (`Jornada_Exigible = 00:00`, permite extras por razo
 
 ### B.2. Permisos parciales
 
-| Descripción | Jornada exigible |
-|---|---|
-| `PERMISO MEDIA JORNADA` | 03:30 |
-| `P/EXCEPCIONAL A/86` | 02:00 |
+| Descripción             | Jornada exigible |
+| ----------------------- | ---------------- |
+| `PERMISO MEDIA JORNADA` | 03:30            |
+| `P/EXCEPCIONAL A/86`    | 02:00            |

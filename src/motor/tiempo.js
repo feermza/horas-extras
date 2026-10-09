@@ -155,18 +155,18 @@ export function solapamiento(a, b) {
 }
 
 /**
- * Suma el solapamiento de cada intervalo con la ventana.
+ * Suma el solapamiento de cada intervalo con un tramo {inicio, fin}.
  * Un arreglo vacío suma 0. No une intervalos que se superpongan entre sí:
  * ese caso no está definido en la especificación y cada uno se cuenta aparte.
  *
  * @param {Array<{ inicio: number, fin: number }>} intervalos
- * @param {{ inicio: number, fin: number }} ventana
+ * @param {{ inicio: number, fin: number }} tramo
  * @returns {number} Entero mayor o igual que 0.
  */
-export function solapamientoTotal(intervalos, ventana) {
+export function solapamientoTotal(intervalos, tramo) {
   let total = 0;
   for (let i = 0; i < intervalos.length; i += 1) {
-    total += solapamiento(intervalos[i], ventana);
+    total += solapamiento(intervalos[i], tramo);
   }
   return total;
 }

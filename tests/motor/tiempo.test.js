@@ -192,7 +192,7 @@ describe("duracionPar e intervaloDePar", () => {
 });
 
 describe("solapamiento", () => {
-  it("intersecta con la ventana de después de las 14:30", () => {
+  it("intersecta con el tramo posterior a horario_fin", () => {
     expect(solapamiento(par("08:00", "17:10"), DESPUES)).toBe(160);
     expect(solapamiento(par("08:00", "15:15"), DESPUES)).toBe(45);
     expect(solapamiento(par("08:00", "15:20"), DESPUES)).toBe(50);
@@ -200,7 +200,7 @@ describe("solapamiento", () => {
     expect(solapamiento(par("08:00", "21:30"), DESPUES)).toBe(420);
   });
 
-  it("intersecta con la ventana de antes de las 08:00", () => {
+  it("intersecta con el intervalo de antes de las 08:00", () => {
     expect(solapamiento(par("07:05", "14:30"), ANTES)).toBe(55);
     expect(solapamiento(par("07:00", "16:00"), ANTES)).toBe(60);
   });
