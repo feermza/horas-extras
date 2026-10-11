@@ -1,7 +1,6 @@
 /**
  * Persistencia de la carpeta de trabajo (sección 2 y 5).
- * File System Access API cuando está disponible; alternativa manual por texto JSON.
- * Sin localStorage de negocio, sin red.
+ * File System Access API (Edge/Chrome). Sin localStorage de negocio, sin red.
  */
 
 import { ARCHIVOS, validarWorkspace } from "./esquemas.js";
@@ -42,15 +41,63 @@ export function parsearJson(texto, nombre) {
 }
 
 /**
+ * @param {string[]} errores
+ * @param {{ leidos?: string[], faltantes?: string[], escritos?: string[] }} [extra]
+ * @returns {Error & { errores: string[], leidos?: string[], faltantes?: string[], escritos?: string[] }}
+ */
+function errorConDetalle(errores, extra = {}) {
+  const error = /** @type {Error & { errores: string[], leidos?: string[], faltantes?: string[], escritos?: string[] }} */ (
+    new Error(errores.join("\n"))
+  );
+  error.errores = errores;
+  if (extra.leidos !== undefined) {
+    error.leidos = extra.leidos;
+  }
+  if (extra.faltantes !== undefined) {
+    error.faltantes = extra.faltantes;
+  }
+  if (extra.escritos !== undefined) {
+    error.escritos = extra.escritos;
+  }
+  return error;
+}
+
+/**
  * @param {Workspace} workspace
  * @returns {Workspace}
  */
 export function exigirWorkspaceValido(workspace) {
   const resultado = validarWorkspace(workspace);
   if (!resultado.ok) {
-    throw new Error(resultado.errores.join("\n"));
+    throw errorConDetalle(resultado.errores);
   }
   return workspace;
+}
+
+/**
+ * Quita `alias` de cada agente. La lectura lo ignora; al guardar no se escribe.
+ *
+ * @param {unknown} agentesDoc
+ * @returns {object}
+ */
+function agentesSinAlias(agentesDoc) {
+  if (agentesDoc === null || typeof agentesDoc !== "object" || Array.isArray(agentesDoc)) {
+    return /** @type {object} */ (agentesDoc);
+  }
+  const doc = /** @type {{ agentes?: unknown }} */ (agentesDoc);
+  if (!Array.isArray(doc.agentes)) {
+    return { ...doc };
+  }
+  return {
+    ...doc,
+    agentes: doc.agentes.map((agente) => {
+      if (agente === null || typeof agente !== "object" || Array.isArray(agente)) {
+        return agente;
+      }
+      const { alias: _omitido, ...resto } = /** @type {Record<string, unknown>} */ (agente);
+      return resto;
+    }),
+  };
 }
 
 /**
@@ -61,7 +108,7 @@ export function exigirWorkspaceValido(workspace) {
  */
 export function workspaceDesdeTextos(textos) {
   const workspace = {
-    agentes: parsearJson(textos.agentes, ARCHIVOS.agentes),
+    agentes: agentesSinAlias(parsearJson(textos.agentes, ARCHIVOS.agentes)),
     grupos: parsearJson(textos.grupos, ARCHIVOS.grupos),
     calendario: parsearJson(textos.calendario, ARCHIVOS.calendario),
     eventos: parsearJson(textos.eventos, ARCHIVOS.eventos),
@@ -77,13 +124,17 @@ export function workspaceDesdeTextos(textos) {
  * @returns {Record<keyof typeof ARCHIVOS, string>}
  */
 export function textosDesdeWorkspace(workspace) {
-  exigirWorkspaceValido(workspace);
+  const limpio = {
+    ...workspace,
+    agentes: agentesSinAlias(workspace.agentes),
+  };
+  exigirWorkspaceValido(/** @type {Workspace} */ (limpio));
   return {
-    agentes: serializarJson(workspace.agentes),
-    grupos: serializarJson(workspace.grupos),
-    calendario: serializarJson(workspace.calendario),
-    eventos: serializarJson(workspace.eventos),
-    catalogos: serializarJson(workspace.catalogos),
+    agentes: serializarJson(limpio.agentes),
+    grupos: serializarJson(limpio.grupos),
+    calendario: serializarJson(limpio.calendario),
+    eventos: serializarJson(limpio.eventos),
+    catalogos: serializarJson(limpio.catalogos),
   };
 }
 
@@ -132,7 +183,7 @@ export function soportaFileSystemAccess() {
 export async function abrirCarpetaTrabajo() {
   if (!soportaFileSystemAccess()) {
     throw new Error(
-      "Este navegador no permite elegir carpeta. Usá la importación manual de JSON.",
+      "Este navegador no permite elegir carpeta. La aplicación requiere Edge o Chrome.",
     );
   }
   return globalThis.showDirectoryPicker({ mode: "readwrite" });
@@ -163,26 +214,69 @@ async function escribirArchivoTexto(dir, nombre, texto) {
 }
 
 /**
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function esArchivoAusente(err) {
+  return err instanceof DOMException && err.name === "NotFoundError";
+}
+
+/**
  * Lee y valida los cinco JSON de la sección 5.
  * Asegura que exista la carpeta periodos/ (vacía si hace falta).
+ * No aplica un workspace a medias: si falta un archivo o la validación falla, lanza.
  *
  * @param {FileSystemDirectoryHandle} dir
- * @returns {Promise<Workspace>}
+ * @returns {Promise<{ workspace: Workspace, leidos: string[], faltantes: string[] }>}
  */
 export async function leerWorkspace(dir) {
-  const textos = {
-    agentes: await leerArchivoTexto(dir, ARCHIVOS.agentes),
-    grupos: await leerArchivoTexto(dir, ARCHIVOS.grupos),
-    calendario: await leerArchivoTexto(dir, ARCHIVOS.calendario),
-    eventos: await leerArchivoTexto(dir, ARCHIVOS.eventos),
-    catalogos: await leerArchivoTexto(dir, ARCHIVOS.catalogos),
-  };
+  /** @type {string[]} */
+  const leidos = [];
+  /** @type {string[]} */
+  const faltantes = [];
+  /** @type {Partial<Record<keyof typeof ARCHIVOS, string>>} */
+  const textos = {};
+
+  for (const [clave, nombre] of Object.entries(ARCHIVOS)) {
+    try {
+      textos[/** @type {keyof typeof ARCHIVOS} */ (clave)] = await leerArchivoTexto(dir, nombre);
+      leidos.push(nombre);
+    } catch (err) {
+      if (esArchivoAusente(err)) {
+        faltantes.push(nombre);
+        continue;
+      }
+      throw errorConDetalle(
+        [`${nombre}: no se pudo leer (${err instanceof Error ? err.message : String(err)}).`],
+        { leidos, faltantes },
+      );
+    }
+  }
+
   try {
     await dir.getDirectoryHandle("periodos", { create: true });
   } catch {
     // Si el handle es de solo lectura, la carpeta puede faltar; la lectura igual sigue.
   }
-  return workspaceDesdeTextos(textos);
+
+  if (faltantes.length > 0) {
+    throw errorConDetalle(
+      faltantes.map((nombre) => `${nombre}: archivo no encontrado.`),
+      { leidos, faltantes },
+    );
+  }
+
+  try {
+    const workspace = workspaceDesdeTextos(
+      /** @type {Record<keyof typeof ARCHIVOS, string>} */ (textos),
+    );
+    return { workspace, leidos, faltantes };
+  } catch (err) {
+    const errores = err && typeof err === "object" && Array.isArray(/** @type {{ errores?: string[] }} */ (err).errores)
+      ? /** @type {{ errores: string[] }} */ (err).errores
+      : [err instanceof Error ? err.message : String(err)];
+    throw errorConDetalle(errores, { leidos, faltantes });
+  }
 }
 
 /**
@@ -190,20 +284,26 @@ export async function leerWorkspace(dir) {
  *
  * @param {FileSystemDirectoryHandle} dir
  * @param {Workspace} workspace
- * @returns {Promise<void>}
+ * @returns {Promise<{ escritos: string[] }>}
  */
 export async function escribirWorkspace(dir, workspace) {
   const textos = textosDesdeWorkspace(workspace);
-  await escribirArchivoTexto(dir, ARCHIVOS.agentes, textos.agentes);
-  await escribirArchivoTexto(dir, ARCHIVOS.grupos, textos.grupos);
-  await escribirArchivoTexto(dir, ARCHIVOS.calendario, textos.calendario);
-  await escribirArchivoTexto(dir, ARCHIVOS.eventos, textos.eventos);
-  await escribirArchivoTexto(dir, ARCHIVOS.catalogos, textos.catalogos);
+  /** @type {string[]} */
+  const escritos = [];
+  for (const [clave, nombre] of Object.entries(ARCHIVOS)) {
+    await escribirArchivoTexto(
+      dir,
+      nombre,
+      textos[/** @type {keyof typeof ARCHIVOS} */ (clave)],
+    );
+    escritos.push(nombre);
+  }
   try {
     await dir.getDirectoryHandle("periodos", { create: true });
   } catch {
     // Igual que al leer: no bloquea el guardado de los JSON de la sección 5.
   }
+  return { escritos };
 }
 
 /**

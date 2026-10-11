@@ -35,12 +35,18 @@ function estaVacio(valor) {
   return valor === null || valor === undefined || valor === "";
 }
 
+/** Hora del día en formato estricto HH:MM (dos dígitos de hora, 00–23). */
+const RE_HORA_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Duración en formato HH:MM con al menos dos dígitos de hora (p. ej. 04:00, 560:00). */
+const RE_DURACION_HHMM = /^\d{2,}:[0-5]\d$/;
+
 /**
  * @param {unknown} texto
  * @returns {boolean}
  */
 function esHoraValida(texto) {
-  return parsearHora(texto) !== null;
+  return typeof texto === "string" && RE_HORA_HHMM.test(texto) && parsearHora(texto) !== null;
 }
 
 /**
@@ -48,7 +54,7 @@ function esHoraValida(texto) {
  * @returns {boolean}
  */
 function esDuracionValida(texto) {
-  return parsearDuracion(texto) !== null;
+  return typeof texto === "string" && RE_DURACION_HHMM.test(texto) && parsearDuracion(texto) !== null;
 }
 
 /**
@@ -104,26 +110,26 @@ function validarConfiguracion(cfg, contexto, errores) {
   }
   for (const campo of CAMPOS_HORA_CONFIG) {
     if (!esHoraValida(cfg[campo])) {
-      errores.push(`${contexto}: ${campo} debe ser HH:MM.`);
+      errores.push(`${contexto}, campo ${campo}: debe ser HH:MM.`);
     }
   }
   for (const campo of CAMPOS_DURACION_CONFIG) {
     if (!esDuracionValida(cfg[campo])) {
-      errores.push(`${contexto}: ${campo} debe ser HH:MM.`);
+      errores.push(`${contexto}, campo ${campo}: debe ser HH:MM.`);
     }
   }
   const sabInicioVacio = estaVacio(cfg.sabado_inicio);
   const sabFinVacio = estaVacio(cfg.sabado_fin);
   if (sabInicioVacio !== sabFinVacio) {
     errores.push(
-      `${contexto}: sábado inválido: hay que cargar sabado_inicio y sabado_fin, o ninguno.`,
+      `${contexto}, campos sabado_inicio/sabado_fin: hay que cargar ambos o ninguno.`,
     );
   } else if (!sabInicioVacio) {
     if (!esHoraValida(cfg.sabado_inicio)) {
-      errores.push(`${contexto}: sabado_inicio debe ser HH:MM.`);
+      errores.push(`${contexto}, campo sabado_inicio: debe ser HH:MM.`);
     }
     if (!esHoraValida(cfg.sabado_fin)) {
-      errores.push(`${contexto}: sabado_fin debe ser HH:MM.`);
+      errores.push(`${contexto}, campo sabado_fin: debe ser HH:MM.`);
     }
   }
 }
@@ -152,14 +158,21 @@ export function validarAgentes(datos) {
       errores.push(`${ctx}: falta el arreglo configuraciones.`);
       continue;
     }
+    const etiqueta = typeof agente.nombre === "string" && agente.nombre !== ""
+      ? `${ctx} (agente "${agente.nombre}")`
+      : ctx;
     for (let j = 0; j < agente.configuraciones.length; j += 1) {
-      validarConfiguracion(agente.configuraciones[j], `${ctx}.configuraciones[${j}]`, errores);
+      validarConfiguracion(
+        agente.configuraciones[j],
+        `${etiqueta}, configuración ${j}`,
+        errores,
+      );
     }
     for (let j = 0; j < agente.configuraciones.length; j += 1) {
       for (let k = j + 1; k < agente.configuraciones.length; k += 1) {
         if (vigenciasSuperpuestas(agente.configuraciones[j], agente.configuraciones[k])) {
           errores.push(
-            `${ctx}: las configuraciones ${j} y ${k} tienen vigencias superpuestas.`,
+            `${etiqueta}: las configuraciones ${j} y ${k} tienen vigencias superpuestas.`,
           );
         }
       }

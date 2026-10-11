@@ -50,7 +50,7 @@ Con eso se genera un **libro Excel mensual** para que el jefe revise y edite lo 
 - **Compilación:** Vite con `vite-plugin-singlefile`. El resultado debe funcionar abierto como `file://` (sin módulos ES externos en tiempo de ejecución).
 - **Pruebas:** Vitest.
 - **Excel:** ExcelJS para **escribir** el libro (soporta estilos, fórmulas, protección de hojas, validación de datos y formato condicional) y para leerlo al importar. No usar la edición comunitaria de SheetJS para escribir, porque no garantiza estilos ni protección.
-- **Persistencia:** archivos **JSON** en una carpeta de trabajo, leídos y escritos con la File System Access API (Edge/Chrome). Como alternativa, exportar e importar JSON manualmente. No usar `localStorage` para datos de negocio.
+- **Persistencia:** archivos **JSON** en una carpeta de trabajo, leídos y escritos con la File System Access API (Edge/Chrome). No usar `localStorage` para datos de negocio.
 - **Estructura de carpetas de datos:**
 
 ```
@@ -154,7 +154,6 @@ Los ejemplos usan datos sintéticos. Las horas se guardan como texto `"HH:MM"`.
       "legajo": 10001,
       "dni": "12345678",
       "nombre": "PEREZ, Juan A.",
-      "alias": ["PEREZ, J."],
       "concepto": "PREST. COMPL.",
       "grupo": "grupo-1",
       "activo": true,
@@ -191,7 +190,7 @@ Reglas:
 - **Sábado:** está habilitado solo si hay `sabado_inicio` y `sabado_fin`. Si falta alguno, no está habilitado. Si solo se carga una de las dos horas, la configuración es inválida: la interfaz no permite guardarla y el motor la trata como no habilitado.
 - `duracion_jornada` se conserva como dato explícito de control y se puede validar contra `horario_fin - horario_inicio`.
 - Las horas de la configuración se validan (formato `HH:MM`) al guardar y al leer los archivos JSON; el motor asume datos válidos.
-- Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre` y `alias`.
+- Un agente se identifica comparando su nombre normalizado (regla de normalización en 6.1) con `nombre`.
 
 ### 5.2. `grupos.json`
 
@@ -586,7 +585,7 @@ Cada fase termina con pruebas en verde y se confirma antes de avanzar.
 | 2    | Clasificación del día y reconocimiento de novedades.                                                                           | Prioridad de tipos de día; reconocimiento por descripción; duplicados detectados.                    |
 | 3    | Cálculo diario (secciones 7 y 8).                                                                                              | Casos 1 a 29 del Anexo A.                                                                            |
 | 4    | Cálculo mensual por agente, liquidación (9) y avisos (10).                                                                     | Casos de liquidación del Anexo A.                                                                    |
-| 5    | Persistencia JSON con File System Access API y alternativa manual.                                                             | Ida y vuelta de todos los archivos de la sección 5.                                                  |
+| 5    | Persistencia JSON con File System Access API.                                                                                  | Ida y vuelta de todos los archivos de la sección 5.                                                  |
 | 6    | Importación del Excel exportado, con el archivo real anonimizado.                                                              | Producir la estructura de la sección 4 desde un archivo real.                                        |
 | 7    | Generación del libro con ExcelJS (sección 11).                                                                                 | Abierto en Excel: fórmulas correctas, protección, validación, colores, impresión y valores de caché. |
 | 8    | Interfaz (sección 14).                                                                                                         | Flujo completo de un mes con datos sintéticos.                                                       |
@@ -651,6 +650,7 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 19. La interfaz no guarda vigencias superpuestas; las horas de la configuración se validan al guardar y al leer (5.1).
 20. Se elimina `AGENTE_SIN_CONFIGURACION`: todos los agentes del listado tienen configuración y generan informe cada mes.
 21. Un día fuera de la vigencia se muestra en `0:00`, sin aviso ni bloqueo, y no es editable.
+22. Se elimina el campo `alias` de los agentes.
 
 ---
 

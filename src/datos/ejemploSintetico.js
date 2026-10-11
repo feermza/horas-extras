@@ -12,7 +12,6 @@ export const workspaceSintetico = {
         legajo: 10001,
         dni: "12345678",
         nombre: "PEREZ, Juan A.",
-        alias: ["PEREZ, J."],
         concepto: "PREST. COMPL.",
         grupo: "grupo-1",
         activo: true,

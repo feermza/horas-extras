@@ -25,7 +25,7 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - La franja del sábado habilitado se cruza solo con [sabado_inicio, sabado_fin] y no se extiende pasada la medianoche.
 - TURNO_DISTINTO_CONFIG no se implementa.
 - Fase 4: liquidar({ minutosSimples, minutosDobles, valorHoraBase }) devuelve { minutosEquivalentes, importe }. El valor hora se lee como texto (String si llega número); coma y punto son separador decimal. El techo se hace una sola vez con BigInt.
-- Fase 4: identificarAgente(nombre, agentes) compara el nombre normalizado con nombre y alias y no mira activo. Cero o más de una coincidencia devuelven null.
+- Fase 4: identificarAgente(nombre, agentes) compara el nombre normalizado con nombre (y aún admite alias si viniera en memoria) y no mira activo. Cero o más de una coincidencia devuelven null.
 - Fase 4: calcularMes({ nombre, agentes, archivo, feriados, eventos, catalogo, finales }) devuelve { agente, periodo, dias, totales, bloqueantes, hayBloqueantes }. Cada día es el resultado de calcularDia más fecha y modificado. Si el agente no se identifica, dias y totales quedan en null y el bloqueante es AGENTE_SIN_CONFIGURACION con fecha null.
 - Fase 4: los totales son las celdas C5 a C10 en minutos enteros, más importe y el valorHoraBase usado. El valor hora es el de la última configuración que cubre algún día del mes. Si ninguna cubre un día, el importe queda null.
 - Un día sin configuración vigente no es bloqueante: calcularDia devuelve las magnitudes en 0, sin avisos, con editable false y bloqueante null.
@@ -36,4 +36,9 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 5: la validación de esquemas devuelve { ok: true } o { ok: false, errores: string[] }. persistencia lanza Error con esos mensajes al leer o guardar.
 - Fase 5: las pruebas de carpeta usan un mock en memoria (crearDirectorioMemoria) con la misma forma que FileSystemDirectoryHandle; no abren el diálogo del navegador.
 - Fase 5: el criterio de aceptación es la ida y vuelta de los cinco JSON de la sección 5. emision-*.json queda para cuando se genere o importe el libro.
-- Fase 5: la pantalla en App.vue es mínima (cargar ejemplo, carpeta, exportar/importar, resumen). La interfaz de la sección 14 es la fase 8.
+- Fase 5: la pantalla en App.vue es de diagnóstico (cargar ejemplo, carpeta, leer, guardar, resumen y detalle). La interfaz de la sección 14 es la fase 8.
+- Fase 5: leerWorkspace devuelve { workspace, leidos, faltantes } y escribirWorkspace { escritos }. Si falta un archivo o la validación falla, se lanza Error con .errores, .leidos y .faltantes; no se aplica un workspace a medias.
+- Fase 5: los JSON de la sección 5 se escriben en la raíz de la carpeta elegida (agentes.json, etc.), no dentro de un subdirectorio datos/.
+- Fase 5 (A): se elimina el campo alias de los agentes; al leer se ignora si viene y al guardar no se escribe.
+- Fase 5 (B): no hay exportación ni importación manual de JSON; la persistencia es solo por carpeta (File System Access API en Edge/Chrome).
+- Fase 5 (C): las horas de configuración se validan como HH:MM estricto (dos dígitos de hora); "8:00" no es válido.

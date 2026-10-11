@@ -34,7 +34,7 @@ describe("validarAgentes", () => {
     const datos = agentesConConfig({ sabado_inicio: "08:00", sabado_fin: null });
     const resultado = validarAgentes(datos);
     expect(resultado.ok).toBe(false);
-    expect(resultado.errores.some((e) => e.includes("sábado"))).toBe(true);
+    expect(resultado.errores.some((e) => e.includes("sabado_inicio"))).toBe(true);
   });
 
   it("acepta sábado con ambos extremos", () => {
