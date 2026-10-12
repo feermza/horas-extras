@@ -68,7 +68,7 @@ function resultadoSinCalculo(agente, periodo, bloqueante) {
 }
 
 /**
- * Compara el nombre normalizado con nombre y alias.
+ * Compara el nombre del archivo (normalizado) con nombre_reloj de cada agente.
  * Una sola coincidencia. No mira el campo activo.
  *
  * @param {unknown} nombre
@@ -85,10 +85,7 @@ export function identificarAgente(nombre, agentes) {
     if (agente === null || typeof agente !== "object" || Array.isArray(agente)) {
       throw new RangeError(`agentes[${i}] debe ser un objeto.`);
     }
-    const alias = Array.isArray(agente.alias) ? agente.alias : [];
-    const nombres = [agente.nombre, ...alias];
-    const coincide = nombres.some((candidato) => normalizarTexto(candidato) === buscado);
-    if (coincide) {
+    if (normalizarTexto(agente.nombre_reloj) === buscado) {
       coincidencias.push(agente);
     }
   }

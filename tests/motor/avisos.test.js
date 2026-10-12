@@ -35,11 +35,6 @@ describe("textoAviso", () => {
 
     expect(textoAviso({ codigo: "MARCACIONES_INCOMPLETAS" }, 50))
       .toBe("Marcaciones incompletas: horas estimadas");
-
-    expect(textoAviso({
-      codigo: "OBSERVACION_NO_RECONOCIDA",
-      texto: "NOTA SUELTA",
-    }, 50)).toBe("Observación no reconocida: NOTA SUELTA");
   });
 
   it("un código desconocido lanza RangeError", () => {

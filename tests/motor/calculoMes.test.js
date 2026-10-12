@@ -34,7 +34,8 @@ function configuracion(parcial = {}) {
  */
 function agente(parcial = {}) {
   return {
-    nombre: "PEREZ, Juan A.",
+    nombre: "PEREZ, Juan Alberto",
+    nombre_reloj: "PEREZ, JUAN",
     activo: false,
     configuraciones: [configuracion()],
     ...parcial,
@@ -47,7 +48,7 @@ function agente(parcial = {}) {
  */
 function mes(parcial) {
   return calcularMes({
-    nombre: parcial.nombre ?? "PEREZ, Juan A.",
+    nombre: parcial.nombre ?? "PEREZ, JUAN",
     agentes: parcial.agentes ?? [agente(parcial.agente)],
     archivo: {
       periodo: parcial.periodo ?? { anio: 2026, mes: 8 },
@@ -61,18 +62,19 @@ function mes(parcial) {
 }
 
 describe("identificarAgente", () => {
-  it("identifica por nombre con otras tildes y mayúsculas, aunque activo sea false", () => {
+  it("identifica por nombre_reloj con otras tildes y mayúsculas, aunque activo sea false", () => {
     const juan = agente();
-    expect(identificarAgente("pérez, JUAN A.", [juan])).toBe(juan);
+    expect(identificarAgente("pérez, juan", [juan])).toBe(juan);
+    expect(identificarAgente("PEREZ, Juan Alberto", [juan])).toBeNull();
   });
 
   it("devuelve nulo si no hay coincidencia o hay más de una", () => {
     const juan = agente();
-    const otro = agente({ nombre: "GARCIA, Ana" });
+    const otro = agente({ nombre: "GARCIA, Ana", nombre_reloj: "GARCIA, ANA" });
     const repetido = agente();
     expect(identificarAgente("NADIE, Nadie", [juan])).toBeNull();
-    expect(identificarAgente("PEREZ, Juan A.", [juan, repetido])).toBeNull();
-    expect(identificarAgente("GARCIA, Ana", [juan, otro])).toBe(otro);
+    expect(identificarAgente("PEREZ, JUAN", [juan, repetido])).toBeNull();
+    expect(identificarAgente("GARCIA, ANA", [juan, otro])).toBe(otro);
   });
 });
 

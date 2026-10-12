@@ -14,3 +14,4 @@ alwaysApply: true
 - El build final debe abrirse con doble clic (file://).
 - Responder y comentar el código en español.
 - Al terminar cada tarea: listar archivos creados o modificados y el resultado de las pruebas.
+- Principio rector: no complicar la lógica ni las reglas con situaciones no planteadas. No agregar campos, archivos, validaciones, avisos ni casos que no estén pedidos expresamente en esta especificación. Ante la duda, la opción más simple.

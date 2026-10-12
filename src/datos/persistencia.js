@@ -8,7 +8,6 @@ import { ARCHIVOS, validarWorkspace } from "./esquemas.js";
 /**
  * @typedef {{
  *   agentes: object,
- *   grupos: object,
  *   calendario: object,
  *   eventos: object,
  *   catalogos: object,
@@ -75,12 +74,13 @@ export function exigirWorkspaceValido(workspace) {
 }
 
 /**
- * Quita `alias` de cada agente. La lectura lo ignora; al guardar no se escribe.
+ * Quita campos legados de cada agente (alias, concepto, grupo).
+ * La lectura los ignora; al guardar no se escriben.
  *
  * @param {unknown} agentesDoc
  * @returns {object}
  */
-function agentesSinAlias(agentesDoc) {
+function agentesSinCamposLegados(agentesDoc) {
   if (agentesDoc === null || typeof agentesDoc !== "object" || Array.isArray(agentesDoc)) {
     return /** @type {object} */ (agentesDoc);
   }
@@ -94,22 +94,26 @@ function agentesSinAlias(agentesDoc) {
       if (agente === null || typeof agente !== "object" || Array.isArray(agente)) {
         return agente;
       }
-      const { alias: _omitido, ...resto } = /** @type {Record<string, unknown>} */ (agente);
+      const {
+        alias: _alias,
+        concepto: _concepto,
+        grupo: _grupo,
+        ...resto
+      } = /** @type {Record<string, unknown>} */ (agente);
       return resto;
     }),
   };
 }
 
 /**
- * Arma un workspace a partir de los cinco textos JSON.
+ * Arma un workspace a partir de los cuatro textos JSON.
  *
  * @param {Record<keyof typeof ARCHIVOS, string>} textos
  * @returns {Workspace}
  */
 export function workspaceDesdeTextos(textos) {
   const workspace = {
-    agentes: agentesSinAlias(parsearJson(textos.agentes, ARCHIVOS.agentes)),
-    grupos: parsearJson(textos.grupos, ARCHIVOS.grupos),
+    agentes: agentesSinCamposLegados(parsearJson(textos.agentes, ARCHIVOS.agentes)),
     calendario: parsearJson(textos.calendario, ARCHIVOS.calendario),
     eventos: parsearJson(textos.eventos, ARCHIVOS.eventos),
     catalogos: parsearJson(textos.catalogos, ARCHIVOS.catalogos),
@@ -118,20 +122,21 @@ export function workspaceDesdeTextos(textos) {
 }
 
 /**
- * Convierte un workspace validado a los cinco textos JSON.
+ * Convierte un workspace validado a los cuatro textos JSON.
  *
  * @param {Workspace} workspace
  * @returns {Record<keyof typeof ARCHIVOS, string>}
  */
 export function textosDesdeWorkspace(workspace) {
   const limpio = {
-    ...workspace,
-    agentes: agentesSinAlias(workspace.agentes),
+    agentes: agentesSinCamposLegados(workspace.agentes),
+    calendario: workspace.calendario,
+    eventos: workspace.eventos,
+    catalogos: workspace.catalogos,
   };
   exigirWorkspaceValido(/** @type {Workspace} */ (limpio));
   return {
     agentes: serializarJson(limpio.agentes),
-    grupos: serializarJson(limpio.grupos),
     calendario: serializarJson(limpio.calendario),
     eventos: serializarJson(limpio.eventos),
     catalogos: serializarJson(limpio.catalogos),
@@ -144,17 +149,17 @@ export function textosDesdeWorkspace(workspace) {
  * @param {Workspace} workspace
  * @returns {{
  *   agentes: number,
- *   grupos: number,
  *   feriados: number,
  *   eventos: number,
  *   justificaciones: number,
  *   permisos: number,
+ *   nombre_libro: string,
+ *   horas_maximas: unknown,
  * }}
  */
 export function resumenWorkspace(workspace) {
   return {
     agentes: Array.isArray(workspace.agentes?.agentes) ? workspace.agentes.agentes.length : 0,
-    grupos: Array.isArray(workspace.grupos?.grupos) ? workspace.grupos.grupos.length : 0,
     feriados: Array.isArray(workspace.calendario?.feriados)
       ? workspace.calendario.feriados.length
       : 0,
@@ -165,6 +170,10 @@ export function resumenWorkspace(workspace) {
     permisos: Array.isArray(workspace.catalogos?.permisos)
       ? workspace.catalogos.permisos.length
       : 0,
+    nombre_libro: typeof workspace.catalogos?.nombre_libro === "string"
+      ? workspace.catalogos.nombre_libro
+      : "",
+    horas_maximas: workspace.catalogos?.horas_maximas ?? null,
   };
 }
 
@@ -222,7 +231,8 @@ function esArchivoAusente(err) {
 }
 
 /**
- * Lee y valida los cinco JSON de la sección 5.
+ * Lee y valida los cuatro JSON de la sección 5.
+ * Si existe un grupos.json legado en la carpeta, se ignora.
  * Asegura que exista la carpeta periodos/ (vacía si hace falta).
  * No aplica un workspace a medias: si falta un archivo o la validación falla, lanza.
  *
@@ -280,7 +290,7 @@ export async function leerWorkspace(dir) {
 }
 
 /**
- * Valida y escribe los cinco JSON en la carpeta.
+ * Valida y escribe los cuatro JSON en la carpeta.
  *
  * @param {FileSystemDirectoryHandle} dir
  * @param {Workspace} workspace

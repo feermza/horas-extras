@@ -30,8 +30,6 @@ export function textoAviso(aviso, umbralMinutos) {
       return `Hay marcaciones en un día justificado (${aviso.novedad})`;
     case "MARCACIONES_INCOMPLETAS":
       return "Marcaciones incompletas: horas estimadas";
-    case "OBSERVACION_NO_RECONOCIDA":
-      return `Observación no reconocida: ${aviso.texto}`;
     default:
       throw new RangeError(`Código de aviso desconocido: ${aviso.codigo}.`);
   }

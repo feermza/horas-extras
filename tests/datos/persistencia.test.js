@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARCHIVOS } from "../../src/datos/esquemas.js";
+import { ARCHIVO_GRUPOS_LEGADO, ARCHIVOS } from "../../src/datos/esquemas.js";
 import {
   crearDirectorioMemoria,
   escribirWorkspace,
@@ -44,24 +44,38 @@ function directorioCon(parcial = {}) {
 }
 
 describe("ida y vuelta por texto", () => {
-  it("serializa, parsea y valida los cinco archivos", () => {
+  it("serializa, parsea y valida los cuatro archivos", () => {
     const textos = textosDesdeWorkspace(workspaceSintetico);
     expect(Object.keys(textos).sort()).toEqual(
-      ["agentes", "calendario", "catalogos", "eventos", "grupos"].sort(),
+      ["agentes", "calendario", "catalogos", "eventos"].sort(),
     );
     const recuperado = workspaceDesdeTextos(textos);
     expect(recuperado).toEqual(workspaceSintetico);
   });
 
-  it("ignora alias al leer y no lo escribe al guardar", () => {
-    const conAlias = structuredClone(workspaceSintetico.agentes);
-    conAlias.agentes[0].alias = ["PEREZ, J."];
+  it("ignora alias, concepto y grupo al leer y no los escribe al guardar", () => {
+    const conLegados = structuredClone(workspaceSintetico.agentes);
+    conLegados.agentes[0].alias = ["PEREZ, J."];
+    conLegados.agentes[0].concepto = "PREST. COMPL.";
+    conLegados.agentes[0].grupo = "grupo-1";
     const textos = textosCompletos();
-    textos.agentes = serializarJson(conAlias);
+    textos.agentes = serializarJson(conLegados);
     const leido = workspaceDesdeTextos(textos);
     expect(leido.agentes.agentes[0].alias).toBeUndefined();
+    expect(leido.agentes.agentes[0].concepto).toBeUndefined();
+    expect(leido.agentes.agentes[0].grupo).toBeUndefined();
     const escritos = textosDesdeWorkspace(leido);
     expect(escritos.agentes).not.toMatch(/"alias"/);
+    expect(escritos.agentes).not.toMatch(/"concepto"/);
+    expect(escritos.agentes).not.toMatch(/"grupo"/);
+  });
+
+  it("guarda y lee nombre_reloj", async () => {
+    const dir = directorioCon();
+    await escribirWorkspace(dir, workspaceSintetico);
+    const leido = await leerWorkspace(dir);
+    expect(leido.workspace.agentes.agentes[0].nombre_reloj).toBe("PEREZ, JUAN");
+    expect(dir._archivos.get(ARCHIVOS.agentes)).toMatch(/"nombre_reloj": "PEREZ, JUAN"/);
   });
 
   it("parsearJson nombra el archivo si el texto no es JSON", () => {
@@ -80,11 +94,20 @@ describe("File System Access (mock en memoria)", () => {
     expect(dir._carpetas.has("periodos")).toBe(true);
     expect(dir._archivos.has(ARCHIVOS.agentes)).toBe(true);
     expect(escrito.escritos).toEqual(Object.values(ARCHIVOS));
+    expect(escrito.escritos).not.toContain(ARCHIVO_GRUPOS_LEGADO);
 
     const leido = await leerWorkspace(dir);
     expect(leido.workspace).toEqual(workspaceSintetico);
     expect(leido.leidos).toEqual(Object.values(ARCHIVOS));
     expect(leido.faltantes).toEqual([]);
+  });
+
+  it("ignora un grupos.json legado al leer la carpeta", async () => {
+    const dir = directorioCon();
+    dir._archivos.set(ARCHIVO_GRUPOS_LEGADO, '{"grupos":[]}');
+    const leido = await leerWorkspace(dir);
+    expect(leido.workspace).toEqual(workspaceSintetico);
+    expect(leido.leidos).not.toContain(ARCHIVO_GRUPOS_LEGADO);
   });
 
   it("rechaza al leer si un archivo es inválido", async () => {
@@ -100,13 +123,12 @@ describe("File System Access (mock en memoria)", () => {
     const textos = textosCompletos();
     const dir = crearDirectorioMemoria({
       [ARCHIVOS.agentes]: textos.agentes,
-      [ARCHIVOS.grupos]: textos.grupos,
     });
     try {
       await leerWorkspace(dir);
       expect.unreachable("debía fallar por archivos faltantes");
     } catch (err) {
-      expect(err.leidos).toEqual([ARCHIVOS.agentes, ARCHIVOS.grupos]);
+      expect(err.leidos).toEqual([ARCHIVOS.agentes]);
       expect(err.faltantes).toEqual([
         ARCHIVOS.calendario,
         ARCHIVOS.eventos,
@@ -129,7 +151,7 @@ describe("File System Access (mock en memoria)", () => {
       expect.unreachable("debía fallar por HH:MM");
     } catch (err) {
       const texto = err.errores.join("\n");
-      expect(texto).toMatch(/PEREZ, Juan A\./);
+      expect(texto).toMatch(/PEREZ, Juan Alberto/);
       expect(texto).toMatch(/horario_inicio/);
     }
   });
@@ -145,7 +167,7 @@ describe("File System Access (mock en memoria)", () => {
   it("una segunda lectura refleja cambios en agentes.json", async () => {
     const dir = directorioCon();
     const primero = await leerWorkspace(dir);
-    expect(primero.workspace.agentes.agentes[0].nombre).toBe("PEREZ, Juan A.");
+    expect(primero.workspace.agentes.agentes[0].nombre).toBe("PEREZ, Juan Alberto");
     expect(primero.workspace.agentes.agentes[0].configuraciones[0].valor_hora_base).toBe(4500);
 
     const agentes = structuredClone(primero.workspace.agentes);
@@ -156,7 +178,7 @@ describe("File System Access (mock en memoria)", () => {
     const segundo = await leerWorkspace(dir);
     expect(segundo.workspace.agentes.agentes[0].nombre).toBe("LOPEZ, Ana");
     expect(segundo.workspace.agentes.agentes[0].configuraciones[0].valor_hora_base).toBe(9999);
-    expect(primero.workspace.agentes.agentes[0].nombre).toBe("PEREZ, Juan A.");
+    expect(primero.workspace.agentes.agentes[0].nombre).toBe("PEREZ, Juan Alberto");
   });
 
   it("si la lectura falla el workspace anterior queda intacto", async () => {
@@ -174,14 +196,15 @@ describe("File System Access (mock en memoria)", () => {
 });
 
 describe("resumenWorkspace", () => {
-  it("cuenta los elementos de cada archivo", () => {
+  it("cuenta los elementos y muestra el libro", () => {
     expect(resumenWorkspace(workspaceSintetico)).toEqual({
       agentes: 1,
-      grupos: 1,
       feriados: 1,
       eventos: 1,
       justificaciones: workspaceSintetico.catalogos.justificaciones.length,
       permisos: workspaceSintetico.catalogos.permisos.length,
+      nombre_libro: "Becas 540",
+      horas_maximas: "560:00",
     });
   });
 });

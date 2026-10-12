@@ -8,6 +8,8 @@ import {
   resumenWorkspace,
   soportaFileSystemAccess,
 } from "../datos/persistencia.js";
+import { leerArchivoMensual } from "../excel/importarMensual.js";
+import { formatearHM } from "../motor/tiempo.js";
 
 /** @typedef {"ok"|"error"|"neutro"|""} EstadoTipo */
 
@@ -29,12 +31,14 @@ const archivosLeidos = ref([]);
 const archivosFaltantes = ref([]);
 /** @type {import("vue").Ref<string[]>} */
 const archivosEscritos = ref([]);
+/** @type {import("vue").Ref<Awaited<ReturnType<typeof leerArchivoMensual>>|null>} */
+const mensual = ref(null);
+const inputExcel = ref(/** @type {HTMLInputElement|null} */ (null));
 
 const resumen = computed(() => (
   workspace.value === null ? null : resumenWorkspace(workspace.value)
 ));
 const agentes = computed(() => workspace.value?.agentes?.agentes ?? []);
-const grupos = computed(() => workspace.value?.grupos?.grupos ?? []);
 const feriados = computed(() => workspace.value?.calendario?.feriados ?? []);
 const eventos = computed(() => workspace.value?.eventos?.eventos ?? []);
 const tieneFsa = soportaFileSystemAccess();
@@ -190,12 +194,51 @@ function alCargarEjemplo() {
     marcarError(err);
   }
 }
+
+/**
+ * @param {number|null} minutos
+ * @returns {string}
+ */
+function horaTexto(minutos) {
+  if (minutos === null || minutos === undefined) {
+    return "";
+  }
+  return formatearHM(minutos);
+}
+
+function alPedirExcel() {
+  inputExcel.value?.click();
+}
+
+/**
+ * @param {Event} evento
+ */
+async function alLeerExcel(evento) {
+  const input = /** @type {HTMLInputElement} */ (evento.target);
+  const archivo = input.files?.[0];
+  input.value = "";
+  if (archivo === undefined) {
+    marcarNeutro("Operación cancelada");
+    return;
+  }
+  try {
+    const buffer = await archivo.arrayBuffer();
+    mensual.value = await leerArchivoMensual(buffer);
+    marcarOk(
+      `Excel mensual leído (${horaActual()}): ${mensual.value.nombre}, `
+      + `${mensual.value.periodo.anio}-${String(mensual.value.periodo.mes).padStart(2, "0")}, `
+      + `${mensual.value.dias.length} días.`,
+    );
+  } catch (err) {
+    marcarError(err);
+  }
+}
 </script>
 
 <template>
   <main class="pantalla">
     <h1>Horas extras</h1>
-    <p class="fase">Fase 5 — diagnóstico de persistencia (no es la interfaz final)</p>
+    <p class="fase">Diagnóstico — fases 5 y 6 (no es la interfaz final)</p>
 
     <div class="acciones">
       <button type="button" @click="alCargarEjemplo">Cargar ejemplo</button>
@@ -212,6 +255,14 @@ function alCargarEjemplo() {
       >
         Guardar en carpeta
       </button>
+      <button type="button" @click="alPedirExcel">Leer Excel mensual</button>
+      <input
+        ref="inputExcel"
+        class="oculto"
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        @change="alLeerExcel"
+      >
     </div>
 
     <p v-if="!tieneFsa" class="aviso">
@@ -252,21 +303,62 @@ function alCargarEjemplo() {
       </div>
     </section>
 
+    <section v-if="mensual" class="mensual">
+      <h2>Excel mensual</h2>
+      <p>
+        Nombre: <strong>{{ mensual.nombre }}</strong>
+        — Período: {{ mensual.periodo.anio }}-{{ String(mensual.periodo.mes).padStart(2, "0") }}
+        — Días: {{ mensual.dias.length }}
+      </p>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Ing.1</th>
+              <th>Sal.1</th>
+              <th>Ing.2</th>
+              <th>Sal.2</th>
+              <th>Ing.3</th>
+              <th>Sal.3</th>
+              <th>Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="dia in mensual.dias" :key="dia.fecha">
+              <td>{{ dia.fecha }}</td>
+              <td>{{ horaTexto(dia.marcaciones[0].ingreso) }}</td>
+              <td>{{ horaTexto(dia.marcaciones[0].salida) }}</td>
+              <td>{{ horaTexto(dia.marcaciones[1].ingreso) }}</td>
+              <td>{{ horaTexto(dia.marcaciones[1].salida) }}</td>
+              <td>{{ horaTexto(dia.marcaciones[2].ingreso) }}</td>
+              <td>{{ horaTexto(dia.marcaciones[2].salida) }}</td>
+              <td>{{ dia.observacion }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section v-if="resumen" class="resumen">
       <h2>Resumen del workspace</h2>
       <p class="origen">Origen: {{ origen }}</p>
       <ul>
         <li>Agentes: {{ resumen.agentes }}</li>
-        <li>Grupos: {{ resumen.grupos }}</li>
         <li>Feriados: {{ resumen.feriados }}</li>
         <li>Eventos: {{ resumen.eventos }}</li>
         <li>Justificaciones: {{ resumen.justificaciones }}</li>
         <li>Permisos: {{ resumen.permisos }}</li>
+        <li>Nombre del libro: {{ resumen.nombre_libro }}</li>
+        <li>Horas máximas: {{ textoOGuion(resumen.horas_maximas) }}</li>
       </ul>
 
       <h3>Agentes</h3>
       <div v-for="(agente, ia) in agentes" :key="'a-' + ia" class="bloque">
-        <p><strong>{{ agente.nombre }}</strong></p>
+        <p>
+          <strong>{{ agente.nombre }}</strong>
+          — reloj: {{ textoOGuion(agente.nombre_reloj) }}
+        </p>
         <div
           v-for="(cfg, ic) in (agente.configuraciones ?? [])"
           :key="'c-' + ia + '-' + ic"
@@ -293,14 +385,6 @@ function alCargarEjemplo() {
           </ul>
         </div>
       </div>
-
-      <h3>Grupos</h3>
-      <ul>
-        <li v-for="(grupo, ig) in grupos" :key="'g-' + ig">
-          {{ grupo.nombre }}
-          — horas máximas: {{ textoOGuion(grupo.horas_maximas) }}
-        </li>
-      </ul>
 
       <h3>Feriados</h3>
       <ul>
@@ -380,6 +464,24 @@ button:disabled {
 }
 .origen {
   font-style: italic;
+}
+.oculto {
+  display: none;
+}
+.tabla-wrap {
+  overflow-x: auto;
+}
+.mensual table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  width: 100%;
+}
+.mensual th,
+.mensual td {
+  border: 1px solid #ccc;
+  padding: 0.2rem 0.4rem;
+  text-align: left;
+  white-space: nowrap;
 }
 .bloque {
   margin-bottom: 1rem;

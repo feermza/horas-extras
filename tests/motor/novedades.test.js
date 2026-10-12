@@ -59,18 +59,20 @@ describe("reconocerNovedad", () => {
       .toBe("AUSENTE_POR_ENFERMEDAD");
   });
 
-  it("no reconoce alias, palabras faltantes, otro orden ni una palabra de más", () => {
-    const noReconocidas = [
+  it("texto ajeno al catálogo o mal formado queda sin novedad", () => {
+    const ajenos = [
       "LICENCIA ANUAL ORDINARIA",
       "LAO",
       "AUSENTE ENFERMEDAD",
       "ENFERMEDAD POR AUSENTE",
       "DUELOS",
       "SOLIC ADEUDADA",
+      "Fin de semana",
+      "Excede horario",
     ];
-    for (const texto of noReconocidas) {
+    for (const texto of ajenos) {
       const resultado = reconocerNovedad(texto, catalogo);
-      expect(resultado.estado).toBe("NO_RECONOCIDA");
+      expect(resultado.estado).toBe("SIN_NOVEDAD");
       expect(resultado.novedad).toBeNull();
       expect(resultado.candidatas).toEqual([]);
     }

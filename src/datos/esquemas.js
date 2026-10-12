@@ -4,15 +4,18 @@
  */
 
 import { parsearDuracion, parsearHora } from "../motor/tiempo.js";
+import { normalizarTexto } from "../motor/texto.js";
 
 /** Nombres fijos de la carpeta de trabajo (sección 2). */
 export const ARCHIVOS = Object.freeze({
   agentes: "agentes.json",
-  grupos: "grupos.json",
   calendario: "calendario.json",
   eventos: "eventos.json",
   catalogos: "catalogos.json",
 });
+
+/** Nombre legado que se ignora si aparece en la carpeta. */
+export const ARCHIVO_GRUPOS_LEGADO = "grupos.json";
 
 const TIPOS_EVENTO = new Set(["ASUETO", "PARO"]);
 
@@ -147,6 +150,8 @@ export function validarAgentes(datos) {
   if (!Array.isArray(datos.agentes)) {
     return { ok: false, errores: ["agentes.json: falta el arreglo agentes."] };
   }
+  /** @type {Map<string, { indice: number, etiqueta: string }>} */
+  const relojesVistos = new Map();
   for (let i = 0; i < datos.agentes.length; i += 1) {
     const agente = datos.agentes[i];
     const ctx = `agentes[${i}]`;
@@ -154,13 +159,26 @@ export function validarAgentes(datos) {
       errores.push(`${ctx}: debe ser un objeto.`);
       continue;
     }
-    if (!Array.isArray(agente.configuraciones)) {
-      errores.push(`${ctx}: falta el arreglo configuraciones.`);
-      continue;
-    }
     const etiqueta = typeof agente.nombre === "string" && agente.nombre !== ""
       ? `${ctx} (agente "${agente.nombre}")`
       : ctx;
+    if (typeof agente.nombre_reloj !== "string" || agente.nombre_reloj.trim() === "") {
+      errores.push(`${etiqueta}, campo nombre_reloj: es obligatorio y no puede estar vacío.`);
+    } else {
+      const claveReloj = normalizarTexto(agente.nombre_reloj);
+      const previo = relojesVistos.get(claveReloj);
+      if (previo !== undefined) {
+        errores.push(
+          `${previo.etiqueta} y ${etiqueta}: el mismo nombre_reloj normalizado (${agente.nombre_reloj}).`,
+        );
+      } else {
+        relojesVistos.set(claveReloj, { indice: i, etiqueta });
+      }
+    }
+    if (!Array.isArray(agente.configuraciones)) {
+      errores.push(`${etiqueta}: falta el arreglo configuraciones.`);
+      continue;
+    }
     for (let j = 0; j < agente.configuraciones.length; j += 1) {
       validarConfiguracion(
         agente.configuraciones[j],
@@ -176,32 +194,6 @@ export function validarAgentes(datos) {
           );
         }
       }
-    }
-  }
-  return errores.length === 0 ? { ok: true } : { ok: false, errores };
-}
-
-/**
- * @param {unknown} datos
- * @returns {{ ok: true } | { ok: false, errores: string[] }}
- */
-export function validarGrupos(datos) {
-  /** @type {string[]} */
-  const errores = [];
-  if (datos === null || typeof datos !== "object" || Array.isArray(datos)) {
-    return { ok: false, errores: ["grupos.json: se esperaba un objeto con la clave grupos."] };
-  }
-  if (!Array.isArray(datos.grupos)) {
-    return { ok: false, errores: ["grupos.json: falta el arreglo grupos."] };
-  }
-  for (let i = 0; i < datos.grupos.length; i += 1) {
-    const grupo = datos.grupos[i];
-    if (grupo === null || typeof grupo !== "object" || Array.isArray(grupo)) {
-      errores.push(`grupos[${i}]: debe ser un objeto.`);
-      continue;
-    }
-    if (!estaVacio(grupo.horas_maximas) && !esDuracionValida(grupo.horas_maximas)) {
-      errores.push(`grupos[${i}]: horas_maximas debe ser HH:MM.`);
     }
   }
   return errores.length === 0 ? { ok: true } : { ok: false, errores };
@@ -287,6 +279,16 @@ export function validarCatalogos(datos) {
   if (!esDuracionValida(datos.umbral_minimo)) {
     errores.push("catalogos.json: umbral_minimo debe ser HH:MM.");
   }
+  if (typeof datos.nombre_libro !== "string" || datos.nombre_libro.trim() === "") {
+    errores.push("catalogos.json, campo nombre_libro: es obligatorio y no puede estar vacío.");
+  }
+  if (!(
+    datos.horas_maximas === null
+    || datos.horas_maximas === undefined
+    || esDuracionValida(datos.horas_maximas)
+  )) {
+    errores.push("catalogos.json, campo horas_maximas: debe ser HH:MM, null o ausente.");
+  }
   if (Array.isArray(datos.permisos)) {
     for (let i = 0; i < datos.permisos.length; i += 1) {
       const permiso = datos.permisos[i];
@@ -303,11 +305,10 @@ export function validarCatalogos(datos) {
 }
 
 /**
- * Valida los cinco archivos de la sección 5.
+ * Valida los cuatro archivos de la sección 5.
  *
  * @param {{
  *   agentes: unknown,
- *   grupos: unknown,
  *   calendario: unknown,
  *   eventos: unknown,
  *   catalogos: unknown,
@@ -317,7 +318,6 @@ export function validarCatalogos(datos) {
 export function validarWorkspace(workspace) {
   const partes = [
     validarAgentes(workspace.agentes),
-    validarGrupos(workspace.grupos),
     validarCalendario(workspace.calendario),
     validarEventos(workspace.eventos),
     validarCatalogos(workspace.catalogos),

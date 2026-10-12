@@ -28,7 +28,6 @@ const AVISO_DOMINGO = "TRABAJO_DOMINGO_SIN_AUTORIZACION";
 const AVISO_SABADO = "TRABAJO_SABADO_NO_HABILITADO";
 const AVISO_JUSTIFICADO = "MARCACIONES_EN_DIA_JUSTIFICADO";
 const AVISO_INCOMPLETAS = "MARCACIONES_INCOMPLETAS";
-const AVISO_NO_RECONOCIDA = "OBSERVACION_NO_RECONOCIDA";
 
 const CLASE_COMPLETA = "COMPLETA";
 const CLASE_ESPECIAL = "ESPECIAL_LAO_RECESO";
@@ -337,10 +336,7 @@ function reglaHabil(novedad, cfg, trab, intervalos) {
   if (novedad !== null && novedad.tipo === "JUSTIFICACION" && novedad.clase === CLASE_ESPECIAL) {
     return regla(trab, 0, minutosDeTope(cfg.tope_lao_receso, "tope_lao_receso"), FACTOR_SIMPLE);
   }
-  if (novedad !== null && novedad.tipo === "PERMISO") {
-    const realizada = Math.max(0, trab - novedad.jornadaExigible);
-    return regla(realizada, 0, minutosDeTope(cfg.tope_extra_habil, "tope_extra_habil"), FACTOR_SIMPLE);
-  }
+  // Sin novedad o con permiso parcial: misma regla; la jornada exigible del permiso solo se muestra.
   return reglaHabilSinNovedad(cfg, intervalos);
 }
 
@@ -545,11 +541,6 @@ export function calcularDia(entrada) {
 
   if (tiempo.incompletas) {
     avisos.push(crearAviso(AVISO_INCOMPLETAS, baseAviso));
-  }
-  if (reconocimiento.estado === "NO_RECONOCIDA") {
-    avisos.push(crearAviso(AVISO_NO_RECONOCIDA, baseAviso, {
-      texto: entrada.observacion == null ? "" : String(entrada.observacion),
-    }));
   }
   if (
     clasificacion.tipo === TIPOS_DIA.HABIL_NORMAL

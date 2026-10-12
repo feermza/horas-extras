@@ -98,14 +98,14 @@ function validarPermiso(entrada, indice) {
 }
 
 /**
- * Reconoce como máximo una novedad en la observación.
- * No emite OBSERVACION_NO_RECONOCIDA ni NOVEDAD_DUPLICADA_EN_FECHA:
- * eso se lee después a partir de `estado`.
+ * Reconoce como máximo una novedad del catálogo en la observación.
+ * Cero coincidencias (vacía o texto ajeno): SIN_NOVEDAD, sin aviso.
+ * La duplicación se lee después a partir de `estado` (NOVEDAD_DUPLICADA_EN_FECHA).
  *
  * @param {unknown} observacion
  * @param {{ justificaciones: object[], permisos: object[] }} catalogo
  * @returns {{
- *   estado: "SIN_NOVEDAD"|"NO_RECONOCIDA"|"RECONOCIDA"|"DUPLICADA",
+ *   estado: "SIN_NOVEDAD"|"RECONOCIDA"|"DUPLICADA",
  *   novedad: object|null,
  *   candidatas: string[],
  * }}
@@ -152,7 +152,7 @@ export function reconocerNovedad(observacion, catalogo) {
   }
 
   if (coincidencias.length === 0) {
-    return { estado: "NO_RECONOCIDA", novedad: null, candidatas: [] };
+    return { estado: "SIN_NOVEDAD", novedad: null, candidatas: [] };
   }
   const candidatas = coincidencias.map((entrada) => entrada.codigo);
   if (coincidencias.length === 1) {

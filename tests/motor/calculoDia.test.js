@@ -198,38 +198,40 @@ describe("Anexo A.1", () => {
     });
   });
 
-  it("caso 7: permiso media jornada", () => {
+  it("caso 7: permiso media jornada con salida tarde", () => {
     const resultado = calcular({
       observacion: "PERMISO MEDIA JORNADA",
-      marcaciones: [par("08:00", "13:00")],
+      marcaciones: [par("11:00", "17:10")],
     });
     expectColumnas(resultado, {
-      realizada: "1:30",
+      realizada: "2:40",
       autorizada: "4:00",
-      computada: "1:30",
+      computada: "2:40",
       excedente: "0:00",
       avisos: [],
     });
+    expect(resultado.novedad.tipo).toBe("PERMISO");
+    expect(resultado.novedad.jornadaExigible).toBe(hm("3:30"));
   });
 
-  it("caso 8: permiso, bajo umbral", () => {
+  it("caso 8: permiso con bajo umbral", () => {
     const resultado = calcular({
       observacion: "PERMISO MEDIA JORNADA",
-      marcaciones: [par("08:00", "12:10")],
+      marcaciones: [par("10:00", "15:15")],
     });
     expectColumnas(resultado, {
-      realizada: "0:40",
+      realizada: "0:45",
       autorizada: "4:00",
       computada: "0:00",
-      excedente: "0:40",
+      excedente: "0:45",
       avisos: ["BAJO_UMBRAL"],
     });
   });
 
-  it("caso 9: permiso, sin extra", () => {
+  it("caso 9: permiso sin extra", () => {
     const resultado = calcular({
       observacion: "PERMISO MEDIA JORNADA",
-      marcaciones: [par("08:00", "11:00")],
+      marcaciones: [par("08:00", "11:30")],
     });
     expectColumnas(resultado, {
       realizada: "0:00",
@@ -238,6 +240,26 @@ describe("Anexo A.1", () => {
       excedente: "0:00",
       avisos: [],
     });
+  });
+
+  it("permiso P/EXCEPCIONAL A/86 da el mismo resultado que sin novedad", () => {
+    const marcaciones = [par("08:00", "17:10")];
+    const conPermiso = calcular({
+      observacion: "P/EXCEPCIONAL A/86",
+      marcaciones,
+    });
+    const sinNovedad = calcular({ marcaciones });
+    expectColumnas(conPermiso, {
+      realizada: "2:40",
+      autorizada: "4:00",
+      computada: "2:40",
+      excedente: "0:00",
+      avisos: [],
+    });
+    expect(conPermiso.Hs_Extra_Realizada).toBe(sinNovedad.Hs_Extra_Realizada);
+    expect(conPermiso.Hs_No_Computable).toBe(sinNovedad.Hs_No_Computable);
+    expect(conPermiso.Hs_Computada_Sistema).toBe(sinNovedad.Hs_Computada_Sistema);
+    expect(conPermiso.novedad.jornadaExigible).toBe(hm("2:00"));
   });
 
   it("caso 10: feriado con exceso, factor 2", () => {
@@ -681,19 +703,67 @@ describe("derivadas del texto", () => {
     expect(resultado.editable).toBe(false);
   });
 
-  it("una observación no reconocida no frena el cálculo", () => {
+  it("un texto ajeno al catálogo no genera novedad ni aviso y se conserva", () => {
+    const observacion = "Fin de semana";
     const resultado = calcular({
-      observacion: "NOTA SUELTA",
+      observacion,
       marcaciones: [par("08:00", "17:10")],
     });
+    expect(resultado.novedad).toBeNull();
+    expect(resultado.avisos.map((a) => a.codigo)).not.toContain("OBSERVACION_NO_RECONOCIDA");
     expectColumnas(resultado, {
       realizada: "2:40",
       autorizada: "4:00",
       computada: "2:40",
       excedente: "0:00",
-      avisos: ["OBSERVACION_NO_RECONOCIDA"],
+      avisos: [],
     });
-    expect(resultado.avisos[0].texto).toBe("NOTA SUELTA");
+    expect(observacion).toBe("Fin de semana");
+
+    const exceso = "Excede horario";
+    const resultadoExceso = calcular({
+      observacion: exceso,
+      marcaciones: [par("08:00", "17:10")],
+    });
+    expect(resultadoExceso.novedad).toBeNull();
+    expect(resultadoExceso.avisos).toEqual([]);
+    expect(exceso).toBe("Excede horario");
+  });
+
+  it("texto ajeno en feriado, asueto o paro no genera novedad ni aviso", () => {
+    for (const caso of [
+      {
+        fecha: FECHA_HABIL,
+        feriados: feriado(FECHA_HABIL, "Feriado sintético"),
+        eventos: [],
+        tipo: "FERIADO",
+      },
+      {
+        fecha: FECHA_HABIL,
+        feriados: [],
+        eventos: evento(FECHA_HABIL, "ASUETO", null),
+        tipo: "ASUETO",
+      },
+      {
+        fecha: FECHA_HABIL,
+        feriados: [],
+        eventos: evento(FECHA_HABIL, "PARO", null),
+        tipo: "PARO",
+      },
+    ]) {
+      const observacion = "Fin de semana";
+      const resultado = calcular({
+        fecha: caso.fecha,
+        feriados: caso.feriados,
+        eventos: caso.eventos,
+        observacion,
+        marcaciones: [par("08:00", "16:00")],
+      });
+      expect(resultado.tipo).toBe(caso.tipo);
+      expect(resultado.novedad).toBeNull();
+      expect(resultado.avisos.map((a) => a.codigo)).not.toContain("OBSERVACION_NO_RECONOCIDA");
+      expect(observacion).toBe("Fin de semana");
+    }
   });
 
   it("la vigencia contiene la fecha en sus dos extremos y no elige entre dos", () => {

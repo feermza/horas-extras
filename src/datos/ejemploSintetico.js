@@ -11,9 +11,8 @@ export const workspaceSintetico = {
         id: "A001",
         legajo: 10001,
         dni: "12345678",
-        nombre: "PEREZ, Juan A.",
-        concepto: "PREST. COMPL.",
-        grupo: "grupo-1",
+        nombre: "PEREZ, Juan Alberto",
+        nombre_reloj: "PEREZ, JUAN",
         activo: true,
         configuraciones: [
           {
@@ -33,16 +32,6 @@ export const workspaceSintetico = {
             valor_hora_base: 4500,
           },
         ],
-      },
-    ],
-  },
-  grupos: {
-    grupos: [
-      {
-        id: "grupo-1",
-        nombre: "Becas 540",
-        concepto: "PREST. COMPL.",
-        horas_maximas: "560:00",
       },
     ],
   },
@@ -104,5 +93,7 @@ export const workspaceSintetico = {
       },
     ],
     umbral_minimo: "00:50",
+    nombre_libro: "Becas 540",
+    horas_maximas: "560:00",
   },
 };
