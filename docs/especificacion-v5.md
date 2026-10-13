@@ -390,11 +390,11 @@ Impiden calcular la fecha afectada hasta que se resuelvan:
 - `NOVEDAD_DUPLICADA_EN_FECHA`.
 - `DATOS_HORARIOS_IMPOSIBLES`.
 
-Una fecha bloqueada aparece en el informe en rojo, con `Realizada = 0` y no editable.
+Una fecha bloqueada aparece en el informe en rojo, con `Realizada = 0` y no editable. No impide generar el libro (14.4).
 
 ### 10.2. Advertencias y avisos
 
-Se calcula normalmente y se marca. El aviso se redacta en lenguaje llano, para el jefe:
+Se calcula normalmente y se marca. El aviso se redacta en lenguaje llano (para la interfaz de RRHH y para colorear filas del libro). **Los avisos no se muestran como texto en el libro Excel** (11.2):
 
 | Código                             | Texto del aviso                                                           |
 | ---------------------------------- | ------------------------------------------------------------------------- |
@@ -425,21 +425,20 @@ Un único libro por mes, llamado `{nombre_libro} - {MM}-{AAAA}.xlsx` (por ejempl
 
 Los totales quedan **arriba** de la tabla, en celdas fijas, para que su posición no dependa de los días del mes.
 
-| Celda         | Contenido                                       |
-| ------------- | ----------------------------------------------- |
-| `A1`          | Título: `INFORME DE HORAS EXTRAS - {MES}/{AÑO}` |
-| `A2` / `B2`   | `Agente:` / nombre                              |
-| `D2` / `E2`   | `Legajo:` / legajo                              |
-| `G2` / `H2`   | `DNI:` / DNI                                    |
-| `G3` / `H3`   | `Valor hora:` / `valor_hora_base`               |
-| `A5` / `C5`   | `Hs. extra realizadas` / total                  |
-| `A6` / `C6`   | `Hs. computadas por el sistema` / total         |
-| `A7` / `C7`   | `Hs. finales simples` / total                   |
-| `A8` / `C8`   | `Hs. finales dobles` / total                    |
-| `A9` / `C9`   | `Hs. finales equivalentes` / total              |
-| `A10` / `C10` | `Importe` / total                               |
+| Celda       | Contenido                                       |
+| ----------- | ----------------------------------------------- |
+| `A1`        | Título: `INFORME DE HORAS EXTRAS - {MES}/{AÑO}` |
+| `A2` / `B2` | `Agente:` / nombre                              |
+| `D2` / `E2` | `Legajo:` / legajo                              |
+| `G2` / `H2` | `DNI:` / DNI                                    |
+| `G3` / `H3` | `Valor hora:` / `valor_hora_base`               |
+| `A5` / `C5` | `Hs. extra realizadas` / total                  |
+| `A6` / `C6` | `Hs. finales simples` / total                   |
+| `A7` / `C7` | `Hs. finales dobles` / total                    |
+| `A8` / `C8` | `Hs. finales equivalentes` / total              |
+| `A9` / `C9` | `Importe` / total                               |
 
-Fila 12: encabezados de la tabla. Filas 13 en adelante: **una fila por cada día del mes**, incluidos los días sin trabajo, para que el jefe vea el mes completo. Se congela el encabezado.
+Fila 12: encabezados de la tabla (con ajuste de texto). Filas 13 en adelante: **una fila por cada día del mes**, incluidos los días sin trabajo, para que el jefe vea el mes completo. Se congela el encabezado.
 
 Columnas de la tabla diaria:
 
@@ -447,7 +446,7 @@ Columnas de la tabla diaria:
 | ----- | ----------------------------------------------------------------- | -------- |
 | A     | Legajo (repetido en cada fila)                                    | No       |
 | B     | Nombre completo (repetido en cada fila)                           | No       |
-| C     | Fecha                                                             | No       |
+| C     | Fecha (formato `dd/mm/aaaa`)                                      | No       |
 | D     | Día de la semana (obtenido de la fecha)                           | No       |
 | E a J | Ingreso 1, Salida 1, Ingreso 2, Salida 2, Ingreso 3, Salida 3     | No       |
 | K     | Hs. jornada (solo para mostrar: `duracion_jornada`; con permiso parcial, la jornada exigible del permiso) | No |
@@ -457,25 +456,22 @@ Columnas de la tabla diaria:
 | O     | Observaciones (original)                                          | No       |
 | P     | Semana: autorizadas                                               | No       |
 | Q     | Semana: finales                                                   | No       |
-| R     | Factor (1 o 2)                                                    | No       |
-| S     | Hs. computadas por el sistema                                     | No       |
-| T     | Aviso                                                             | No       |
+| R     | Factor (1 o 2); **columna oculta**                                | No       |
 
-No se muestran en la hoja (aunque el motor las calcule): tipo de día, turno, horas trabajadas, horas no computables, excedente ni la marca de modificado.
+No se muestran en la hoja (aunque el motor las calcule): horas computadas por el sistema, textos de aviso, tipo de día, turno, horas trabajadas, horas no computables, excedente ni la marca de modificado. Los avisos del motor sí se usan para colorear filas (11.4).
 
-Las horas se guardan como valores de hora de Excel (fracción de día = `minutos / 1440`) con formato `[h]:mm`.
+Las horas se guardan como valores de hora de Excel (fracción de día = `minutos / 1440`) con formato `[h]:mm`. Anchos de columna fijos según el contenido. Área de impresión: `A:Q`.
 
 ### 11.3. Fórmulas de la hoja de agente
 
 `F` es la primera fila de datos (13) y `L` la última (`12 + días del mes`).
 
-- `N{r}`: valor inicial igual a `S{r}` (constante, no fórmula).
+- `N{r}`: valor inicial igual a las horas computadas por el sistema de esa fila (constante, no fórmula).
 - `C5`: `=SUM(M13:M{L})`
-- `C6`: `=SUM(S13:S{L})`
-- `C7`: `=SUMIF(R13:R{L},1,N13:N{L})`
-- `C8`: `=SUMIF(R13:R{L},2,N13:N{L})`
-- `C9`: `=C7+2*C8`
-- `C10`: `=ROUNDUP(ROUND(C9*1440,0)*H3/60,0)`
+- `C6`: `=SUMIF(R13:R{L},1,N13:N{L})`
+- `C7`: `=SUMIF(R13:R{L},2,N13:N{L})`
+- `C8`: `=C6+2*C7`
+- `C9`: `=ROUNDUP(ROUND(C8*1440,0)*H3/60,0)`
 
 **Sumas semanales** (`P` y `Q`): la semana va de lunes a sábado y solo incluye días del mes. En las filas de sábado, y también en la última fila del mes si ese día es de lunes a viernes, `P{r}` y `Q{r}` son fórmulas que suman `L` y `N` respectivamente desde el lunes de esa semana (o el primer día del mes, si la semana empezó el mes anterior) hasta la fila actual inclusive. En las demás filas quedan vacías. No hay topes semanales ni avisos por esas sumas.
 
@@ -489,30 +485,30 @@ Para cada celda con fórmula se debe escribir también el **valor calculado** (`
 - En las hojas de agente, solo las celdas de la columna `N` de las filas con `M > 0` están desbloqueadas. En los demás días, `N` queda bloqueada. Todo el resto de la hoja está bloqueado.
 - **Validación de datos** en `N`: valor entre `0` y `M{r}` (no se puede autorizar más de lo realizado). Mensaje de error en español.
 - Las filas con bloqueante quedan en rojo y `N` bloqueada.
-- Colores de fondo de la fila, según el aviso (columna `T`):
-  - amarillo `#FFF2CC`: excedente para autorizar, sin autorización o bajo umbral;
+- Colores de fondo de la fila (columnas `A` a `Q`; `N` conserva el azul), por la primera regla que cumpla:
+  - rojo `#F4B6B6`: bloqueante;
   - naranja `#F8CBAD`: trabajo en domingo o sábado no habilitado;
-  - gris `#EDEDED`: día sin trabajo, día justificado o día no laborable sin marcaciones;
-  - rojo `#F4B6B6`: bloqueante.
-- La columna `N` se distingue con fondo azul claro `#DDEBF7`. Con formato condicional, si `N` difiere de `S` se resalta `N` en verde claro `#E2EFDA`.
-- Impresión: A4 horizontal, ajustada a un ancho de página, una hoja de agente por página.
+  - amarillo `#FFF2CC`: excedente para autorizar, sin autorización o bajo umbral;
+  - resto: filas alternadas blanco y gris claro `#F2F2F2` (según la paridad de la fila).
+- La columna `N` tiene fondo azul claro `#DDEBF7` en todas las filas. Por cada fila editable, una regla de formato condicional de tipo expresión sobre `N{r}`: `=ROUND($N{r}*1440,0)<>{minutos computados por el sistema de esa fila}`, con relleno verde `#A9D08E` (`bgColor` en ExcelJS). Las filas no editables no tienen esa regla.
+- Impresión: A4 horizontal, ajustada a un ancho de página, área `A:Q`, una hoja de agente por página.
 
 ### 11.5. Hoja `Resumen`
 
-Es el **Informe Mensual de Total de Horas Extras (IMTHE)**. Sus horas apuntan a las horas finales de cada hoja de agente (`C9`), por lo que se actualizan solas cuando el jefe edita la columna `N`.
+Es el **Informe Mensual de Total de Horas Extras (IMTHE)**. Sus horas apuntan a las horas finales de cada hoja de agente (`C8`), por lo que se actualizan solas cuando el jefe edita la columna `N`.
 
 - `C1`: `{MES}/{AÑO}` (por ejemplo, `AGOSTO/2026`). Los textos de período se generan a partir del mes; nunca quedan meses fijos.
 - Encabezados de la tabla en la fila 2: `Legajo Nº`, `Apellido y Nombres`, `DNI`, `Monto/Hora`, `Horas`, `Monto Total`.
 - Una fila por agente, desde la fila 3, en orden de legajo.
-  - `E{r}` = `='{Hoja del agente}'!$C$9` (horas equivalentes finales).
+  - `E{r}` = `='{Hoja del agente}'!$C$8` (horas equivalentes finales).
   - `F{r}` = `=ROUNDUP(ROUND(E{r}*1440,0)*D{r}/60,0)`.
   - `D{r}` toma el `valor_hora_base` vigente del agente.
 - Fila de totales: suma de `E` y de `F`.
-- Si el catálogo trae `horas_maximas`, debajo de los totales se agrega el control:
+- Si el catálogo trae `horas_maximas`, debajo de los totales se agrega el control. Las etiquetas ocupan `A:B` combinadas; el valor de horas va en `C` y el monto en `D`:
   - `Cant. Máxima de Hs. a abonar (A)`: el valor configurado y su monto (`máximo × valor hora`).
   - `Total de horas (B)`: la suma de la columna `E`.
-  - `Diferencia (A - B)`: `=IF(B>A,"SE SUPERA EL MÁXIMO POR "&TEXT(B-A,"[h]:mm"),A-B)`; en rojo si se supera.
-- No se genera el bloque de diferencias ni el arrastre entre meses (1.2).
+  - `Diferencia (A - B)`: `=IF(C_B>C_A,"SE SUPERA EL MÁXIMO POR "&TEXT(C_B-C_A,"[h]:mm"),C_A-C_B)`; en rojo si se supera.
+- Anchos suficientes en todas las columnas. No se genera el bloque de diferencias ni el arrastre entre meses (1.2).
 
 ---
 
@@ -530,9 +526,25 @@ La auditoría se hace con el propio libro devuelto: conserva las marcaciones, la
 
 ## 14. INTERFAZ MÍNIMA (RRHH)
 
-1. **Configuración:** alta y edición de agentes (con su historial de vigencias y todos los topes obligatorios), feriados, eventos (asuetos y paros) y catálogos.
-2. **Período:** elegir la carpeta o los archivos mensuales exportados; mostrar por agente el resultado, los avisos y los bloqueantes, con una forma de corregir los datos faltantes.
-3. **Generar libro:** deshabilitado mientras haya bloqueantes, salvo confirmación explícita (las fechas afectadas quedan en rojo y bloqueadas).
+La pantalla principal es un flujo por pasos numerados, uno debajo del otro. Cada paso se habilita solo cuando se cumplió el anterior.
+
+### 14.1. Paso 1 — Carpeta de datos
+
+Botón **Elegir carpeta**. Al elegirla se leen los cuatro JSON de la sección 5 (con los mensajes de error en español ya definidos). Se muestra el nombre de la carpeta elegida.
+
+### 14.2. Paso 2 — Excel mensuales
+
+Selector de archivos `.xlsx` con selección múltiple (uno por agente). Cada archivo se lee con `leerArchivoMensual` y se identifica con `identificarAgente`.
+
+### 14.3. Paso 3 — Resultado
+
+Una fila por archivo con el nombre del archivo y el agente reconocido. Si el nombre no coincide con ningún agente, un desplegable con los agentes para elegir uno: al elegirlo, `nombre_reloj` de ese agente pasa a ser ese nombre (reemplaza el anterior), se escribe en la carpeta del paso 1 y el archivo se vuelve a identificar.
+
+Debajo, **Días a revisar**: lista informativa de agente, fecha y texto de los días con bloqueante o con aviso `MARCACIONES_INCOMPLETAS`. Si no hay, no se muestra nada.
+
+### 14.4. Paso 4 — Descargar libro
+
+Botón **Descargar libro**, siempre habilitado mientras haya al menos un archivo reconocido. No se deshabilita ni pide confirmación aunque haya días bloqueados: esas fechas salen en rojo y no editables en el libro (10.1 y 11.4). Genera un solo libro con todos los agentes reconocidos y lo descarga como `{nombre_libro} - {MM}-{AAAA}.xlsx`. Los archivos sin agente asociado se dejan afuera y quedan listados en el paso 3.
 
 ---
 
@@ -621,6 +633,9 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 29. La hoja `Resumen` es el IMTHE y se actualiza sola con las horas finales de cada hoja.
 30. El supuesto de horas dobles (cada hora de feriado cuenta por dos) queda confirmado.
 31. Permiso parcial: no modifica el cálculo de horas extras (rige la regla de sin novedad); la jornada exigible solo se muestra en el informe.
+32. Informe individual sin columnas S ni T; totales en `C5:C9`; `R` oculta; Resumen apunta a `C8`; avisos solo para color; verde de `N` por regla por fila editable.
+33. Interfaz por pasos (14): carpeta, Excel múltiples, asociación de `nombre_reloj`, días a revisar, descarga del libro sin bloquear por fechas bloqueantes.
+34. Verde de formato condicional de `N`: `#A9D08E`.
 
 ---
 
@@ -635,7 +650,7 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 7. **Reconocimiento de novedades:** por coincidencia de palabras completas dentro de la observación (confirmado).
 8. **Segundos:** si el archivo trajera segundos, se truncan al minuto.
 9. **Límite de autorización:** el jefe puede fijar horas finales entre cero y lo realizado, nunca más que lo realizado.
-10. **Fechas bloqueadas:** se muestran en rojo y no editables. Todos los agentes del listado generan informe cada mes.
+10. **Fechas bloqueadas:** se muestran en rojo y no editables; no impiden generar el libro. Todos los agentes del listado generan informe cada mes.
 
 ---
 
@@ -690,11 +705,11 @@ Salvo indicación, el agente tiene: franja `08:00-14:30`, `tope_extra_habil = 04
 
 | #   | Verificación                                                                       |
 | --- | ---------------------------------------------------------------------------------- |
-| B1  | Los totales quedan en `C5:C10` de cada hoja, para meses de 28, 30 y 31 días.        |
-| B2  | Cambiar `N` en una fila recalcula `C7:C10` y el `Resumen`; si `N` difiere de `S`, el formato condicional resalta `N` en verde. |
+| B1  | Los totales quedan en `C5:C9` de cada hoja, para meses de 28, 30 y 31 días.         |
+| B2  | Cambiar `N` en una fila recalcula `C6:C9` y el `Resumen`; si `N` difiere de las computadas, el formato condicional resalta `N` en verde. |
 | B3  | `N` rechaza valores mayores que `M` o negativos.                                   |
 | B4  | `N` está bloqueada en filas con `M = 0` y todo el resto de la hoja está protegido. |
-| B5  | `Resumen!E` coincide con `C9` de cada hoja y `F` con `ROUNDUP` por agente.         |
+| B5  | `Resumen!E` coincide con `C8` de cada hoja y `F` con `ROUNDUP` por agente.         |
 | B6  | El control de horas máximas avisa cuando el total las supera.                      |
 
 ---

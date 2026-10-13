@@ -52,3 +52,12 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - El informe individual pasa a columnas A–T (finales en N, computadas en S, sumas semanales P/Q); el Resumen es el IMTHE y apunta a las horas finales.
 - Supuesto 1 confirmado: cada hora de feriado cuenta por dos (horas equivalentes).
 - Permiso parcial: no cambia el cálculo de extras (misma regla que sin novedad); jornadaExigible solo se informa para el informe.
+- Fase 7: nombre de hoja = apellido + inicial del nombre (antes de la primera coma); colisiones con sufijo " 2", " 3".
+- Fase 7: el control de horas máximas del Resumen usa el valor_hora_base del primer agente (orden de legajo) solo para el monto mostrado junto al máximo.
+- Fase 7: en la UI de diagnóstico, al armar calcularMes se convierten los minutos del Excel mensual a H:MM; generarLibro escribe las marcas del archivo en minutos o H:MM.
+- Fase 7: la validación de N usa fórmula de celda M{r}; ExcelJS al releer formula2 como NaN, así que las pruebas confirman el XML del xlsx.
+- Ajuste fase 7: sin columnas S/T; totales C5:C9; R oculta; Resumen → C8; verde de N con una regla por fila editable (bgColor) y minutos computados embebidos; filas alternadas #F2F2F2.
+- Fase 8A: la lógica del flujo (asociarNombreReloj, diasARevisar, armarMesesParaLibro) vive en src/ui/flujo.js sin DOM; App.vue solo orquesta.
+- Fase 8A: al asociar un Excel a un agente se reemplaza nombre_reloj, se guarda en la carpeta y se vuelve a identificar; el libro incluye solo reconocidos.
+- Fase 8A: el verde de N pasa a #A9D08E.
+- Ajuste 8A: carpeta vacía (faltan los cuatro JSON) no es error; se conserva el handle y se informa cargar el ejemplo y guardar.
