@@ -551,6 +551,18 @@ La corrección vale solo para la sesión: no se escribe en el Excel original ni 
 
 Botón **Descargar libro**, siempre habilitado mientras haya al menos un archivo reconocido. No se deshabilita ni pide confirmación aunque haya días bloqueados: esas fechas salen en rojo y no editables en el libro (10.1 y 11.4). Genera un solo libro con todos los agentes reconocidos y lo descarga como `{nombre_libro} - {MM}-{AAAA}.xlsx`. Los archivos sin agente asociado se dejan afuera y quedan listados en el paso 3.
 
+### 14.5. Configuración
+
+Botón **Configuración** en el encabezado, habilitado solo con la carpeta del paso 1 elegida (y datos cargados). Abre una vista aparte (sin router) con pestañas **Agentes**, **Calendario** y **Catálogo**, y un botón **Volver al flujo**.
+
+Cada pestaña trabaja sobre una copia en memoria de los datos leídos. **Guardar** valida y, si es válido, escribe solo el JSON de esa pestaña en la carpeta y actualiza los datos del flujo (se recalculan los meses ya cargados). **Descartar** vuelve a lo leído de la carpeta. Los errores se muestran en español, junto al campo o arriba de la pestaña; no se guarda nada si hay alguno.
+
+**Agentes.** Lista (legajo, nombre, `nombre_reloj`, activo). Alta con **Nuevo agente** y edición al elegir uno; sin borrado, solo la casilla **Activo**. Campos: legajo, dni, nombre, `nombre_reloj`, activo. El `id` se genera solo al dar de alta (`A` + número siguiente de tres dígitos, p. ej. `A005`) y no se edita. Configuraciones ordenadas por `vigencia_desde`: se editan todos los campos del 5.1 y se puede quitar cualquiera. Horas en `HH:MM` estricto. **Nueva configuración** copia la última, pide `vigencia_desde` y, si la anterior tiene `vigencia_hasta` nula, la cierra el día anterior. En el alta de un agente nuevo, la primera configuración sale con `tope_lao_receso` `08:00` y los demás topes vacíos. Al guardar: todos los topes completos (`0:00` válido), `sabado_inicio` y `sabado_fin` ambos o ninguno, sin vigencias superpuestas, `nombre_reloj` obligatorio y único normalizado, legajo y dni obligatorios, `valor_hora_base` mayor que cero, `vigencia_hasta` no anterior a `vigencia_desde`.
+
+**Calendario.** Dos listas, Feriados y Asuetos (los paros se cargan como asuetos), cada una con fecha (`AAAA-MM-DD`) y descripción. Agregar, editar y quitar; ordenadas por fecha. Validar fecha real, descripción no vacía y sin fechas repetidas dentro de la misma lista.
+
+**Catálogo.** Solo `umbral_minimo` (`HH:MM`), `nombre_libro` (obligatorio) y `horas_maximas` (vacío = sin control; si tiene valor, formato de horas que puede superar 24). Las listas de justificaciones y permisos no se muestran ni se editan.
+
 ---
 
 ## 15. FASES DE IMPLEMENTACIÓN
@@ -645,6 +657,7 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 36. Formato del libro (11.2–11.5): rótulos de totales en `B4:B9` con `C4` = suma de `L`; presentación de `K` y `L`; centrado salvo nombre/observaciones; Resumen con rótulos en `B` y afinado mínimo.
 37. Se elimina `eventos.json`, el tipo `PARO`, `tope_paro` y `tope_especial`; los asuetos (y los paros) viven en `calendario.json`; quedan tres JSON.
 38. Justificación `COMPLETA` prevalece sobre el tipo de día (8.2); `LIC. ANUAL ORDINARIA` y `RECESO INVERNAL` no cambian.
+39. Configuración en pantalla (14.5): pestañas Agentes, Calendario y Catálogo; edición en memoria con Guardar/Descartar por pestaña.
 
 ---
 

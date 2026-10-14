@@ -3,7 +3,13 @@
  * File System Access API (Edge/Chrome). Sin localStorage de negocio, sin red.
  */
 
-import { ARCHIVOS, validarWorkspace } from "./esquemas.js";
+import {
+  ARCHIVOS,
+  validarAgentes,
+  validarCalendario,
+  validarCatalogos,
+  validarWorkspace,
+} from "./esquemas.js";
 
 /**
  * @typedef {{
@@ -332,6 +338,43 @@ export async function leerWorkspace(dir) {
       : [err instanceof Error ? err.message : String(err)];
     throw errorConDetalle(errores, { leidos, faltantes });
   }
+}
+
+/**
+ * Valida y escribe un solo JSON de la sección 5 (agentes, calendario o catalogos).
+ *
+ * @param {FileSystemDirectoryHandle} dir
+ * @param {keyof typeof ARCHIVOS} clave
+ * @param {object} datos
+ * @returns {Promise<{ escritos: string[], datos: object }>}
+ */
+export async function escribirParteWorkspace(dir, clave, datos) {
+  if (!(clave in ARCHIVOS)) {
+    throw new RangeError(`Parte desconocida: ${String(clave)}.`);
+  }
+  let limpio;
+  if (clave === "agentes") {
+    limpio = agentesSinCamposLegados(datos);
+    const resultado = validarAgentes(limpio);
+    if (!resultado.ok) {
+      throw errorConDetalle(resultado.errores);
+    }
+  } else if (clave === "calendario") {
+    limpio = calendarioSinCamposLegados(datos);
+    const resultado = validarCalendario(limpio);
+    if (!resultado.ok) {
+      throw errorConDetalle(resultado.errores);
+    }
+  } else {
+    limpio = datos;
+    const resultado = validarCatalogos(limpio);
+    if (!resultado.ok) {
+      throw errorConDetalle(resultado.errores);
+    }
+  }
+  const nombre = ARCHIVOS[clave];
+  await escribirArchivoTexto(dir, nombre, serializarJson(limpio));
+  return { escritos: [nombre], datos: limpio };
 }
 
 /**
