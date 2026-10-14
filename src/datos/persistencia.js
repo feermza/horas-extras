@@ -9,7 +9,6 @@ import { ARCHIVOS, validarWorkspace } from "./esquemas.js";
  * @typedef {{
  *   agentes: object,
  *   calendario: object,
- *   eventos: object,
  *   catalogos: object,
  * }} Workspace
  */
@@ -74,7 +73,21 @@ export function exigirWorkspaceValido(workspace) {
 }
 
 /**
- * Quita campos legados de cada agente (alias, concepto, grupo).
+ * Quita campos legados de cada configuración (tope_paro).
+ *
+ * @param {unknown} cfg
+ * @returns {unknown}
+ */
+function configuracionSinCamposLegados(cfg) {
+  if (cfg === null || typeof cfg !== "object" || Array.isArray(cfg)) {
+    return cfg;
+  }
+  const { tope_paro: _topeParo, ...resto } = /** @type {Record<string, unknown>} */ (cfg);
+  return resto;
+}
+
+/**
+ * Quita campos legados de cada agente (alias, concepto, grupo) y tope_paro de configs.
  * La lectura los ignora; al guardar no se escriben.
  *
  * @param {unknown} agentesDoc
@@ -100,13 +113,46 @@ function agentesSinCamposLegados(agentesDoc) {
         grupo: _grupo,
         ...resto
       } = /** @type {Record<string, unknown>} */ (agente);
-      return resto;
+      const configs = Array.isArray(resto.configuraciones)
+        ? resto.configuraciones.map(configuracionSinCamposLegados)
+        : resto.configuraciones;
+      return { ...resto, configuraciones: configs };
     }),
   };
 }
 
 /**
- * Arma un workspace a partir de los cuatro textos JSON.
+ * Normaliza calendario: asuetos ausente → []; quita tope_especial de cada asueto.
+ *
+ * @param {unknown} calendarioDoc
+ * @returns {object}
+ */
+function calendarioSinCamposLegados(calendarioDoc) {
+  if (calendarioDoc === null || typeof calendarioDoc !== "object" || Array.isArray(calendarioDoc)) {
+    return /** @type {object} */ (calendarioDoc);
+  }
+  const doc = /** @type {{ feriados?: unknown, asuetos?: unknown }} */ (calendarioDoc);
+  const asuetosFuente = Array.isArray(doc.asuetos) ? doc.asuetos : [];
+  const asuetos = asuetosFuente.map((asueto) => {
+    if (asueto === null || typeof asueto !== "object" || Array.isArray(asueto)) {
+      return asueto;
+    }
+    const {
+      tope_especial: _topeEspecial,
+      tipo: _tipo,
+      ...resto
+    } = /** @type {Record<string, unknown>} */ (asueto);
+    return resto;
+  });
+  return {
+    ...doc,
+    feriados: Array.isArray(doc.feriados) ? doc.feriados : doc.feriados,
+    asuetos,
+  };
+}
+
+/**
+ * Arma un workspace a partir de los tres textos JSON.
  *
  * @param {Record<keyof typeof ARCHIVOS, string>} textos
  * @returns {Workspace}
@@ -114,15 +160,14 @@ function agentesSinCamposLegados(agentesDoc) {
 export function workspaceDesdeTextos(textos) {
   const workspace = {
     agentes: agentesSinCamposLegados(parsearJson(textos.agentes, ARCHIVOS.agentes)),
-    calendario: parsearJson(textos.calendario, ARCHIVOS.calendario),
-    eventos: parsearJson(textos.eventos, ARCHIVOS.eventos),
+    calendario: calendarioSinCamposLegados(parsearJson(textos.calendario, ARCHIVOS.calendario)),
     catalogos: parsearJson(textos.catalogos, ARCHIVOS.catalogos),
   };
   return exigirWorkspaceValido(/** @type {Workspace} */ (workspace));
 }
 
 /**
- * Convierte un workspace validado a los cuatro textos JSON.
+ * Convierte un workspace validado a los tres textos JSON.
  *
  * @param {Workspace} workspace
  * @returns {Record<keyof typeof ARCHIVOS, string>}
@@ -130,15 +175,13 @@ export function workspaceDesdeTextos(textos) {
 export function textosDesdeWorkspace(workspace) {
   const limpio = {
     agentes: agentesSinCamposLegados(workspace.agentes),
-    calendario: workspace.calendario,
-    eventos: workspace.eventos,
+    calendario: calendarioSinCamposLegados(workspace.calendario),
     catalogos: workspace.catalogos,
   };
   exigirWorkspaceValido(/** @type {Workspace} */ (limpio));
   return {
     agentes: serializarJson(limpio.agentes),
     calendario: serializarJson(limpio.calendario),
-    eventos: serializarJson(limpio.eventos),
     catalogos: serializarJson(limpio.catalogos),
   };
 }
@@ -150,7 +193,7 @@ export function textosDesdeWorkspace(workspace) {
  * @returns {{
  *   agentes: number,
  *   feriados: number,
- *   eventos: number,
+ *   asuetos: number,
  *   justificaciones: number,
  *   permisos: number,
  *   nombre_libro: string,
@@ -163,7 +206,9 @@ export function resumenWorkspace(workspace) {
     feriados: Array.isArray(workspace.calendario?.feriados)
       ? workspace.calendario.feriados.length
       : 0,
-    eventos: Array.isArray(workspace.eventos?.eventos) ? workspace.eventos.eventos.length : 0,
+    asuetos: Array.isArray(workspace.calendario?.asuetos)
+      ? workspace.calendario.asuetos.length
+      : 0,
     justificaciones: Array.isArray(workspace.catalogos?.justificaciones)
       ? workspace.catalogos.justificaciones.length
       : 0,
@@ -231,8 +276,8 @@ function esArchivoAusente(err) {
 }
 
 /**
- * Lee y valida los cuatro JSON de la sección 5.
- * Si existe un grupos.json legado en la carpeta, se ignora.
+ * Lee y valida los tres JSON de la sección 5.
+ * Si existe un grupos.json o eventos.json legado en la carpeta, se ignora.
  * Asegura que exista la carpeta periodos/ (vacía si hace falta).
  * No aplica un workspace a medias: si falta un archivo o la validación falla, lanza.
  *
@@ -290,7 +335,7 @@ export async function leerWorkspace(dir) {
 }
 
 /**
- * Valida y escribe los cuatro JSON en la carpeta.
+ * Valida y escribe los tres JSON en la carpeta.
  *
  * @param {FileSystemDirectoryHandle} dir
  * @param {Workspace} workspace

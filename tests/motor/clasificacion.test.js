@@ -21,12 +21,11 @@ function errorDeProgramacion(accion) {
 }
 
 describe("TIPOS_DIA", () => {
-  it("está congelado y conserva las seis claves", () => {
+  it("está congelado y conserva las cinco claves", () => {
     expect(Object.isFrozen(TIPOS_DIA)).toBe(true);
     expect(TIPOS_DIA).toEqual({
       FERIADO: "FERIADO",
       ASUETO: "ASUETO",
-      PARO: "PARO",
       SABADO: "SABADO",
       DOMINGO: "DOMINGO",
       HABIL_NORMAL: "HABIL_NORMAL",
@@ -52,7 +51,7 @@ describe("diaDeLaSemana", () => {
 });
 
 describe("clasificarDia", () => {
-  it("clasifica hábil, sábado y domingo sin feriado ni evento", () => {
+  it("clasifica hábil, sábado y domingo sin feriado ni asueto", () => {
     expect(clasificarDia("2026-08-19", [], [])).toEqual({
       tipo: TIPOS_DIA.HABIL_NORMAL,
       detalle: null,
@@ -69,38 +68,31 @@ describe("clasificarDia", () => {
 
   it("aplica la prioridad de la sección 3.3", () => {
     const feriado = { fecha: "2026-08-20", descripcion: "Cierre del edificio" };
-    const asueto = { fecha: "2026-08-20", tipo: "ASUETO", descripcion: "Puente", tope_especial: null };
-    const paro = { fecha: "2026-08-20", tipo: "PARO", descripcion: "Medida", tope_especial: null };
+    const asueto = { fecha: "2026-08-20", descripcion: "Puente" };
 
     expect(clasificarDia("2026-08-20", [feriado], [asueto]).tipo).toBe(TIPOS_DIA.FERIADO);
-    expect(clasificarDia("2026-08-20", [], [paro, asueto]).tipo).toBe(TIPOS_DIA.ASUETO);
+    expect(clasificarDia("2026-08-20", [], [asueto]).tipo).toBe(TIPOS_DIA.ASUETO);
 
     expect(clasificarDia("2026-08-22", [{ fecha: "2026-08-22", descripcion: "Feriado sábado" }], []).tipo)
       .toBe(TIPOS_DIA.FERIADO);
     expect(clasificarDia("2026-08-23", [{ fecha: "2026-08-23", descripcion: "Feriado domingo" }], []).tipo)
       .toBe(TIPOS_DIA.FERIADO);
-    expect(clasificarDia("2026-08-22", [], [{ fecha: "2026-08-22", tipo: "ASUETO", descripcion: "Asueto sábado", tope_especial: null }]).tipo)
+    expect(clasificarDia("2026-08-22", [], [{ fecha: "2026-08-22", descripcion: "Asueto sábado" }]).tipo)
       .toBe(TIPOS_DIA.ASUETO);
-    expect(clasificarDia("2026-08-23", [], [{ fecha: "2026-08-23", tipo: "PARO", descripcion: "Paro domingo", tope_especial: null }]).tipo)
-      .toBe(TIPOS_DIA.PARO);
+    expect(clasificarDia("2026-08-23", [], [{ fecha: "2026-08-23", descripcion: "Paro" }]).tipo)
+      .toBe(TIPOS_DIA.ASUETO);
   });
 
-  it("devuelve el feriado o el evento, con su tope especial (caso 18, solo clasificación)", () => {
+  it("devuelve el feriado o el asueto original como detalle", () => {
     const feriado = { fecha: "2026-08-17", descripcion: "Acto institucional" };
     const porFeriado = clasificarDia("2026-08-17", [feriado], []);
     expect(porFeriado.detalle).toBe(feriado);
     expect(porFeriado.detalle.descripcion).toBe("Acto institucional");
 
-    const evento = {
-      fecha: "2026-08-20",
-      tipo: "ASUETO",
-      descripcion: "Asueto de prueba",
-      tope_especial: "02:00",
-    };
-    const porAsueto = clasificarDia("2026-08-20", [], [evento]);
+    const asueto = { fecha: "2026-08-20", descripcion: "Paro" };
+    const porAsueto = clasificarDia("2026-08-20", [], [asueto]);
     expect(porAsueto.tipo).toBe(TIPOS_DIA.ASUETO);
-    expect(porAsueto.detalle).toBe(evento);
-    expect(porAsueto.detalle.tope_especial).toBe("02:00");
+    expect(porAsueto.detalle).toBe(asueto);
   });
 
   it("no usa el texto de la descripción para clasificar", () => {
@@ -113,43 +105,28 @@ describe("clasificarDia", () => {
     expect(resultado.detalle.descripcion).toBe("ASUETO");
   });
 
-  it("rechaza configuración duplicada y un tipo de evento desconocido", () => {
+  it("rechaza feriados o asuetos duplicados en la misma fecha", () => {
     errorDeProgramacion(() => clasificarDia("2026-08-19", [
       { fecha: "2026-08-19", descripcion: "Uno" },
       { fecha: "2026-08-19", descripcion: "Dos" },
     ], []));
     errorDeProgramacion(() => clasificarDia("2026-08-20", [], [
-      { fecha: "2026-08-20", tipo: "ASUETO", descripcion: "Uno", tope_especial: null },
-      { fecha: "2026-08-20", tipo: "ASUETO", descripcion: "Dos", tope_especial: null },
+      { fecha: "2026-08-20", descripcion: "Uno" },
+      { fecha: "2026-08-20", descripcion: "Dos" },
     ]));
-    expect(() => clasificarDia("2026-08-20", [], [
-      { fecha: "2026-08-20", tipo: "OTRO", descripcion: "Raro", tope_especial: null },
-    ])).toThrow(RangeError);
-
-    const asuetoYParo = clasificarDia("2026-08-20", [], [
-      { fecha: "2026-08-20", tipo: "PARO", descripcion: "Medida", tope_especial: null },
-      { fecha: "2026-08-20", tipo: "ASUETO", descripcion: "Puente", tope_especial: "02:00" },
-    ]);
-    expect(asuetoYParo.tipo).toBe(TIPOS_DIA.ASUETO);
   });
 
   it("no muta los arreglos congelados", () => {
     const feriados = Object.freeze([
       Object.freeze({ fecha: "2026-08-22", descripcion: "Cierre" }),
     ]);
-    const eventos = Object.freeze([
-      Object.freeze({
-        fecha: "2026-08-22",
-        tipo: "ASUETO",
-        descripcion: "Puente",
-        tope_especial: null,
-      }),
+    const asuetos = Object.freeze([
+      Object.freeze({ fecha: "2026-08-22", descripcion: "Puente" }),
     ]);
-    const resultado = clasificarDia("2026-08-22", feriados, eventos);
+    const resultado = clasificarDia("2026-08-22", feriados, asuetos);
     expect(resultado.tipo).toBe(TIPOS_DIA.FERIADO);
     expect(resultado.detalle).toBe(feriados[0]);
     expect(feriados).toHaveLength(1);
-    expect(eventos).toHaveLength(1);
-    expect(eventos[0].tope_especial).toBe(null);
+    expect(asuetos).toHaveLength(1);
   });
 });

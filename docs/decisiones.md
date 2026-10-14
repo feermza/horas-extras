@@ -10,14 +10,13 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 1: duracionPar e intervaloDePar lanzan RangeError si los minutos no son enteros entre 0 y 1439; quien las llame debe descartar antes los null de parsearHora.
 - Fase 1: solapamiento devuelve 0 si el tramo común no es positivo, incluso con intervalos invertidos.
 - Fase 2: el día de la semana se calcula con Date.UTC y getUTCDay; es el único uso de Date en el motor.
-- Fase 2: dos feriados con la fecha pedida, o dos eventos del mismo tipo con esa fecha, lanzan Error. Un asueto y un paro el mismo día se resuelven por prioridad y no son error.
+- Fase 2: dos feriados o dos asuetos con la fecha pedida lanzan Error.
 - Fase 2: la duplicación se mira solo entre entradas cuya fecha es igual a la pedida. No se valida el formato de las fechas de las listas.
-- Fase 2: un tipo de evento distinto de ASUETO o PARO lanza RangeError en cualquier elemento del arreglo, aunque su fecha no sea la pedida.
 - Fase 2: reconocerNovedad devuelve { estado, novedad, candidatas } y no emite avisos. Los estados son SIN_NOVEDAD, RECONOCIDA y DUPLICADA (texto ajeno al catálogo = SIN_NOVEDAD).
 - Fase 2: la coincidencia exige la descripción normalizada como palabras completas y en orden, con espacios de borde. No hay alias.
 - Fase 2: jornadaExigible se guarda en minutos enteros, parseados con parsearDuracion. La descripción del resultado es la del catálogo, sin normalizar.
 - Fase 2: un catálogo con descripción vacía al normalizar, clase distinta de COMPLETA o ESPECIAL_LAO_RECESO, o jornada_exigible inválida lanza RangeError.
-- Fase 2: el detalle de clasificarDia es el objeto original del feriado o del evento, o null. tope_especial no se interpreta en esta fase.
+- Fase 2: el detalle de clasificarDia es el objeto original del feriado o del asueto, o null.
 - Fase 3: calcularDia devuelve las magnitudes de 3.2 en minutos enteros, más factor, tipo, novedad (el objeto reconocido o null), metodo, avisos, bloqueante y editable. Hs_Final arranca igual a la computada. Cada aviso es { codigo, realizada, tope, excedente, novedad, texto }, sin el texto llano.
 - Fase 3: editable es true solo si la realizada es mayor que 0 y no hay bloqueante. Una fecha bloqueada deja las magnitudes en 0, el factor en 1, el método en null, sin avisos y con editable false.
 - Fase 3: las horas de las marcaciones se interpretan con parsearHora antes de duracionPar e intervaloDePar. null, undefined y "" son un extremo vacío; cualquier otro valor no interpretable bloquea la fecha con DATOS_HORARIOS_IMPOSIBLES y no lanza. Una hora de la configuración que sí está cargada y no se puede interpretar lanza RangeError.
@@ -28,7 +27,7 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - TURNO_DISTINTO_CONFIG no se implementa.
 - Fase 4: liquidar({ minutosSimples, minutosDobles, valorHoraBase }) devuelve { minutosEquivalentes, importe }. El valor hora se lee como texto (String si llega número); coma y punto son separador decimal. El techo se hace una sola vez con BigInt.
 - Fase 4: identificarAgente(nombre, agentes) compara el nombre del archivo normalizado con nombre_reloj y no mira activo. Cero o más de una coincidencia devuelven null.
-- Fase 4: calcularMes({ nombre, agentes, archivo, feriados, eventos, catalogo, finales }) devuelve { agente, periodo, dias, totales, bloqueantes, hayBloqueantes }. Cada día es el resultado de calcularDia más fecha y modificado. Si el agente no se identifica, dias y totales quedan en null y el bloqueante es AGENTE_SIN_CONFIGURACION con fecha null.
+- Fase 4: calcularMes({ nombre, agentes, archivo, feriados, asuetos, catalogo, finales }) devuelve { agente, periodo, dias, totales, bloqueantes, hayBloqueantes }. Cada día es el resultado de calcularDia más fecha y modificado. Si el agente no se identifica, dias y totales quedan en null y el bloqueante es AGENTE_SIN_CONFIGURACION con fecha null.
 - Fase 4: los totales son las celdas C5 a C10 en minutos enteros, más importe y el valorHoraBase usado. El valor hora es el de la última configuración que cubre algún día del mes. Si ninguna cubre un día, el importe queda null.
 - Un día sin configuración vigente no es bloqueante: calcularDia devuelve las magnitudes en 0, sin avisos, con editable false y bloqueante null.
 - calcularMes no bloquea al agente por días fuera de la vigencia. Esos días aportan 0 a los totales.
@@ -37,7 +36,7 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 4: textoAviso(aviso, umbralMinutos) redacta la tabla de 10.2. BAJO_UMBRAL usa el umbral recibido. Un código desconocido lanza RangeError. Los bloqueantes no tienen texto.
 - Fase 5: la validación de esquemas devuelve { ok: true } o { ok: false, errores: string[] }. persistencia lanza Error con esos mensajes al leer o guardar.
 - Fase 5: las pruebas de carpeta usan un mock en memoria (crearDirectorioMemoria) con la misma forma que FileSystemDirectoryHandle; no abren el diálogo del navegador.
-- Fase 5: el criterio de aceptación es la ida y vuelta de los cuatro JSON de la sección 5.
+- Fase 5: el criterio de aceptación es la ida y vuelta de los tres JSON de la sección 5.
 - Fase 5: la pantalla en App.vue es de diagnóstico (cargar ejemplo, carpeta, leer, guardar, resumen y detalle). La interfaz de la sección 14 es la fase 8.
 - Fase 5: leerWorkspace devuelve { workspace, leidos, faltantes } y escribirWorkspace { escritos }. Si falta un archivo o la validación falla, se lanza Error con .errores, .leidos y .faltantes; no se aplica un workspace a medias.
 - Fase 5: los JSON de la sección 5 se escriben en la raíz de la carpeta elegida (agentes.json, etc.), no dentro de un subdirectorio datos/.
@@ -60,4 +59,8 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Fase 8A: la lógica del flujo (asociarNombreReloj, diasARevisar, armarMesesParaLibro) vive en src/ui/flujo.js sin DOM; App.vue solo orquesta.
 - Fase 8A: al asociar un Excel a un agente se reemplaza nombre_reloj, se guarda en la carpeta y se vuelve a identificar; el libro incluye solo reconocidos.
 - Fase 8A: el verde de N pasa a #A9D08E.
-- Ajuste 8A: carpeta vacía (faltan los cuatro JSON) no es error; se conserva el handle y se informa cargar el ejemplo y guardar.
+- Ajuste 8A: carpeta vacía (faltan los tres JSON) no es error; se conserva el handle y se informa cargar el ejemplo y guardar.
+- Fase 8C: corregirMarcaciones en flujo.js valida HH:MM estricto o vacío y actualiza el archivo mensual en memoria; App.vue solo orquesta Corregir/Aplicar/Cancelar.
+- Fase 8C: la corrección no persiste en el Excel ni en la carpeta; al reelegir archivos del paso 2 se pierde.
+- Ajuste fase 7 (formato): solo presentación en generarLibro; no toca motor ni validación de N. Rótulos de totales en B4:B9; C4 suma L mostrada. K en 0:00 para COMPLETA, domingo, sábado no habilitado, feriado y asueto. L en feriado/asueto muestra tope solo con marcación cargada. P y C4 usan L mostrada. Resumen: rótulos en B sin merge A:B; centrado salvo B; encabezados gris/negrita, bordes finos, montos #,##0.
+- Cambio de reglas: se elimina eventos.json, PARO, tope_paro y tope_especial; calendario.json lleva feriados y asuetos (paros como asuetos). Tres JSON; eventos.json legado se ignora. COMPLETA prevalece sobre el tipo de día; LAO/RECESO no cambian.

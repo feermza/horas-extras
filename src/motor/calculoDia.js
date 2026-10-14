@@ -117,17 +117,6 @@ function sabadoHabilitado(cfg) {
 }
 
 /**
- * @param {object|null} detalle
- * @returns {number|null} Minutos del tope especial, o null si no existe.
- */
-function topeEspecial(detalle) {
-  if (detalle === null || detalle === undefined || esVacio(detalle.tope_especial)) {
-    return null;
-  }
-  return minutosDeTope(detalle.tope_especial, "tope_especial");
-}
-
-/**
  * @param {string} codigo
  * @param {{ realizada: number, tope: number, excedente: number }} base
  * @param {{ novedad?: string|null, texto?: string|null }} [extra]
@@ -357,7 +346,7 @@ function reglaSabado(cfg, trab, intervalos) {
 }
 
 /**
- * Reglas por tipo de día (8.2), con la excepción de la licencia anual primero.
+ * Reglas por tipo de día (8.2): COMPLETA prevalece; luego licencia anual; luego el tipo.
  *
  * @param {{
  *   tipo: string,
@@ -365,12 +354,14 @@ function reglaSabado(cfg, trab, intervalos) {
  *   cfg: object,
  *   trab: number,
  *   intervalos: Array<{ inicio: number, fin: number }>,
- *   detalle: object|null,
  * }} entrada
  * @returns {{ realizada: number, noComputable: number, tope: number, factor: number }}
  */
 export function reglasPorTipo(entrada) {
-  const { tipo, novedad, cfg, trab, intervalos, detalle } = entrada;
+  const { tipo, novedad, cfg, trab, intervalos } = entrada;
+  if (novedad !== null && novedad.tipo === "JUSTIFICACION" && novedad.clase === CLASE_COMPLETA) {
+    return regla(0, 0, 0, FACTOR_SIMPLE);
+  }
   if (esLicenciaAnual(novedad) && tipo !== TIPOS_DIA.HABIL_NORMAL) {
     return regla(trab, 0, minutosDeTope(cfg.tope_lao_receso, "tope_lao_receso"), FACTOR_SIMPLE);
   }
@@ -384,16 +375,8 @@ export function reglasPorTipo(entrada) {
       return regla(trab, 0, 0, FACTOR_SIMPLE);
     case TIPOS_DIA.FERIADO:
       return regla(trab, 0, minutosDeTope(cfg.tope_feriado, "tope_feriado"), FACTOR_DOBLE);
-    case TIPOS_DIA.ASUETO: {
-      const especial = topeEspecial(detalle);
-      const tope = especial === null ? minutosDeTope(cfg.tope_asueto, "tope_asueto") : especial;
-      return regla(trab, 0, tope, FACTOR_SIMPLE);
-    }
-    case TIPOS_DIA.PARO: {
-      const especial = topeEspecial(detalle);
-      const tope = especial === null ? minutosDeTope(cfg.tope_paro, "tope_paro") : especial;
-      return regla(trab, 0, tope, FACTOR_SIMPLE);
-    }
+    case TIPOS_DIA.ASUETO:
+      return regla(trab, 0, minutosDeTope(cfg.tope_asueto, "tope_asueto"), FACTOR_SIMPLE);
     default:
       throw new RangeError(`Tipo de día no previsto: ${tipo}.`);
   }
@@ -496,13 +479,13 @@ function codigoExceso(entrada) {
  *   observacion?: unknown,
  *   configuraciones: object[],
  *   feriados: object[],
- *   eventos: object[],
+ *   asuetos: object[],
  *   catalogo: { justificaciones: object[], permisos: object[], umbral_minimo: unknown },
  * }} entrada
  * @returns {object}
  */
 export function calcularDia(entrada) {
-  const clasificacion = clasificarDia(entrada.fecha, entrada.feriados, entrada.eventos);
+  const clasificacion = clasificarDia(entrada.fecha, entrada.feriados, entrada.asuetos);
   const cfg = configuracionVigente(entrada.configuraciones, entrada.fecha);
   if (cfg === null) {
     return diaFueraDeVigencia(clasificacion.tipo);
@@ -524,13 +507,15 @@ export function calcularDia(entrada) {
   }
 
   const novedad = reconocimiento.novedad;
+  const esCompleta = novedad !== null
+    && novedad.tipo === "JUSTIFICACION"
+    && novedad.clase === CLASE_COMPLETA;
   const magnitudes = reglasPorTipo({
     tipo: clasificacion.tipo,
     novedad,
     cfg,
     trab: tiempo.minutos,
     intervalos: tiempo.intervalos,
-    detalle: clasificacion.detalle,
   });
   const { realizada, noComputable, tope, factor } = magnitudes;
   const computada = realizada >= umbral ? Math.min(realizada, tope) : 0;
@@ -542,28 +527,24 @@ export function calcularDia(entrada) {
   if (tiempo.incompletas) {
     avisos.push(crearAviso(AVISO_INCOMPLETAS, baseAviso));
   }
-  if (
-    clasificacion.tipo === TIPOS_DIA.HABIL_NORMAL
-    && novedad !== null
-    && novedad.tipo === "JUSTIFICACION"
-    && novedad.clase === CLASE_COMPLETA
-    && tiempo.minutos > 0
-  ) {
+  if (esCompleta && tiempo.minutos > 0) {
     avisos.push(crearAviso(AVISO_JUSTIFICADO, baseAviso, { novedad: novedad.descripcion }));
   }
 
-  const laoNoHabil = esLicenciaAnual(novedad) && clasificacion.tipo !== TIPOS_DIA.HABIL_NORMAL;
-  const exceso = codigoExceso({
-    tipo: clasificacion.tipo,
-    realizada,
-    computada,
-    tope,
-    umbral,
-    sabadoHabilitado: sabadoHabilitado(cfg),
-    laoNoHabil,
-  });
-  if (exceso !== null) {
-    avisos.push(crearAviso(exceso, baseAviso));
+  if (!esCompleta) {
+    const laoNoHabil = esLicenciaAnual(novedad) && clasificacion.tipo !== TIPOS_DIA.HABIL_NORMAL;
+    const exceso = codigoExceso({
+      tipo: clasificacion.tipo,
+      realizada,
+      computada,
+      tope,
+      umbral,
+      sabadoHabilitado: sabadoHabilitado(cfg),
+      laoNoHabil,
+    });
+    if (exceso !== null) {
+      avisos.push(crearAviso(exceso, baseAviso));
+    }
   }
 
   return {

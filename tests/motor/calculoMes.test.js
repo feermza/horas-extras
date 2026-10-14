@@ -21,7 +21,6 @@ function configuracion(parcial = {}) {
     sabado_tope: "00:00",
     tope_feriado: "04:00",
     tope_asueto: "04:00",
-    tope_paro: "04:00",
     tope_lao_receso: "08:00",
     valor_hora_base: 4500,
     ...parcial,
@@ -55,7 +54,7 @@ function mes(parcial) {
       dias: parcial.dias ?? [],
     },
     feriados: parcial.feriados ?? [],
-    eventos: parcial.eventos ?? [],
+    asuetos: parcial.asuetos ?? [],
     catalogo: CATALOGO,
     finales: parcial.finales,
   });

@@ -3,7 +3,6 @@ import {
   validarAgentes,
   validarCalendario,
   validarCatalogos,
-  validarEventos,
   validarWorkspace,
 } from "../../src/datos/esquemas.js";
 import { workspaceSintetico } from "./fixtures/workspace.js";
@@ -87,15 +86,18 @@ describe("validarCalendario", () => {
     const resultado = validarCalendario({ feriados: [{ descripcion: "x" }] });
     expect(resultado.ok).toBe(false);
   });
-});
 
-describe("validarEventos", () => {
-  it("rechaza un tipo que no es ASUETO ni PARO", () => {
-    const datos = structuredClone(workspaceSintetico.eventos);
-    datos.eventos[0].tipo = "FERIADO";
-    const resultado = validarEventos(datos);
+  it("acepta calendario sin lista asuetos o con asuetos vacío", () => {
+    expect(validarCalendario({ feriados: [] })).toEqual({ ok: true });
+    expect(validarCalendario({ feriados: [], asuetos: [] })).toEqual({ ok: true });
+  });
+
+  it("rechaza asueto sin fecha", () => {
+    const resultado = validarCalendario({
+      feriados: [],
+      asuetos: [{ descripcion: "Paro" }],
+    });
     expect(resultado.ok).toBe(false);
-    expect(resultado.errores.some((e) => e.includes("ASUETO o PARO"))).toBe(true);
   });
 });
 

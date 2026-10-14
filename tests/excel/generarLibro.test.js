@@ -29,7 +29,6 @@ function configuracion(parcial = {}) {
     sabado_tope: "00:00",
     tope_feriado: "04:00",
     tope_asueto: "04:00",
-    tope_paro: "04:00",
     tope_lao_receso: "08:00",
     valor_hora_base: 4500,
     ...parcial,
@@ -75,7 +74,7 @@ function dia(fecha, ingreso, salida, observacion = "") {
  *   dias?: object[],
  *   agente?: object,
  *   feriados?: object[],
- *   eventos?: object[],
+ *   asuetos?: object[],
  *   catalogo?: object,
  *   nombre?: string,
  * }} parcial
@@ -92,7 +91,7 @@ function mesDe(parcial) {
     agentes,
     archivo,
     feriados: parcial.feriados ?? [],
-    eventos: parcial.eventos ?? [],
+    asuetos: parcial.asuetos ?? [],
     catalogo: parcial.catalogo ?? CATALOGO,
   });
   return { resultado, archivo };
@@ -155,17 +154,29 @@ describe("generarLibro", () => {
       const wb = await leerLibro(buffer);
       const hoja = wb.getWorksheet("PEREZ, J");
       expect(hoja).toBeDefined();
+      expect(hoja.getCell("B4").value).toBe("Hs. extra autorizadas");
+      expect(hoja.getCell("B5").value).toBe("Hs. extra realizadas");
+      expect(hoja.getCell("B6").value).toBe("Hs. finales (días comunes)");
+      expect(hoja.getCell("B7").value).toBe("Hs. finales (feriados, cuentan x2)");
+      expect(hoja.getCell("B8").value).toBe("Total hs. a liquidar");
+      expect(hoja.getCell("B9").value).toBe("Importe");
+      expect(hoja.getCell("A4").value).toBeNull();
+      expect(hoja.getCell("A5").value).toBeNull();
+      expect(hoja.getCell("A10").value).toBeNull();
       expect(minutosDeValor(hoja.getCell("C5").value)).toBe(item.resultado.totales.realizadas);
       expect(minutosDeValor(hoja.getCell("C6").value)).toBe(item.resultado.totales.finalesSimples);
       expect(minutosDeValor(hoja.getCell("C7").value)).toBe(item.resultado.totales.finalesDobles);
       expect(minutosDeValor(hoja.getCell("C8").value)).toBe(item.resultado.totales.finalesEquivalentes);
       expect(resultadoFormula(hoja.getCell("C9").value)).toBe(item.resultado.totales.importe);
-      expect(hoja.getCell("A6").value).toBe("Hs. finales simples");
-      expect(hoja.getCell("A10").value).toBeNull();
+      expect(hoja.getCell("C4").value).toMatchObject({
+        formula: `SUM(L13:L${12 + caso.diasMes})`,
+      });
       expect(hoja.getCell("C5").value).toMatchObject({
         formula: expect.stringMatching(/^SUM\(M13:M\d+\)$/),
       });
       expect(hoja.getCell("C8").value).toMatchObject({ formula: "C6+2*C7" });
+      expect(hoja.getCell("C4").alignment?.horizontal).toBe("center");
+      expect(hoja.getCell("B4").alignment?.horizontal).toBe("left");
     }
   });
 
@@ -235,13 +246,24 @@ describe("generarLibro", () => {
 
     let filaDif = null;
     resumen.eachRow((row, n) => {
-      if (row.getCell(1).value === "Diferencia (A - B)") {
+      if (row.getCell(2).value === "Diferencia (A - B)") {
         filaDif = n;
       }
     });
     expect(filaDif).not.toBeNull();
     expect(String(resultadoFormula(resumen.getCell(filaDif, 3).value))).toMatch(/SE SUPERA EL MÁXIMO/);
-    expect(resumen.getCell(filaDif, 1).value).toBe("Diferencia (A - B)");
+    expect(resumen.getCell(filaDif, 2).value).toBe("Diferencia (A - B)");
+    expect(resumen.getCell(filaDif, 1).value).toBeNull();
+    expect(resumen.getCell(filaDif - 2, 2).value).toBe("Cant. Máxima de Hs. a abonar (A)");
+    expect(resumen.getCell(filaDif - 2, 1).value).toBeNull();
+    expect(resumen.getCell("B5").value).toBe("Totales");
+    expect(resumen.getCell("A5").value).toBeNull();
+    expect(resumen.getCell(2, 1).font?.bold).toBe(true);
+    expect(resumen.getCell(2, 1).fill?.fgColor?.argb).toBe("FFF2F2F2");
+    expect(resumen.getCell("D3").numFmt).toBe("#,##0");
+    expect(resumen.getCell("F3").numFmt).toBe("#,##0");
+    expect(resumen.getCell("B3").alignment?.horizontal).toBe("left");
+    expect(resumen.getCell("A3").alignment?.horizontal).toBe("center");
   });
 
   it("no tiene columnas S ni T; R está oculta; anchos definidos", async () => {
@@ -342,6 +364,144 @@ describe("generarLibro", () => {
     const hoja = wb.getWorksheet("PEREZ, J");
     const fila = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
     expect(minutosDeValor(hoja.getCell(fila, 11).value)).toBe(210);
+  });
+
+  it("K en 0:00 para COMPLETA, domingo, sábado no habilitado, feriado y asueto; sin cambio en hábil, permiso, sábado habilitado y LAO", async () => {
+    const ag = agente({
+      configuraciones: [configuracion({
+        sabado_inicio: "08:00",
+        sabado_fin: "12:00",
+        sabado_tope: "04:00",
+      })],
+    });
+    const agSabadoOff = agente({
+      id: "A002",
+      legajo: 10002,
+      nombre: "LOPEZ, Maria",
+      nombre_reloj: "LOPEZ, MARIA",
+      configuraciones: [configuracion()],
+    });
+    const item = mesDe({
+      anio: 2026,
+      mes: 8,
+      agente: ag,
+      feriados: [{ fecha: "2026-08-17", descripcion: "Feriado" }],
+      asuetos: [
+        { fecha: "2026-08-19", descripcion: "Asueto" },
+        { fecha: "2026-08-20", descripcion: "Paro" },
+      ],
+      dias: [
+        dia("2026-08-17", "08:00", "12:00"),
+        dia("2026-08-18", "08:00", "17:10"),
+        dia("2026-08-19", "08:00", "12:00"),
+        dia("2026-08-20", "08:00", "12:00"),
+        dia("2026-08-21", "08:00", "12:00", "AUSENTE POR ENFERMEDAD"),
+        dia("2026-08-22", "08:00", "12:00"),
+        dia("2026-08-23", "08:00", "12:00"),
+        dia("2026-08-24", "08:00", "12:00", "LIC. ANUAL ORDINARIA"),
+        dia("2026-08-25", "08:00", "17:10", "PERMISO MEDIA JORNADA"),
+      ],
+    });
+    const itemOff = mesDe({
+      anio: 2026,
+      mes: 8,
+      agente: agSabadoOff,
+      dias: [dia("2026-08-22", "08:00", "11:00")],
+    });
+    const buffer = await generarLibro({ meses: [item, itemOff], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const hojaOff = wb.getWorksheet("LOPEZ, M");
+    const idx = (fecha) => 13 + item.resultado.dias.findIndex((d) => d.fecha === fecha);
+    const k = (fecha) => minutosDeValor(hoja.getCell(idx(fecha), 11).value);
+    const l = (fecha) => minutosDeValor(hoja.getCell(idx(fecha), 12).value);
+
+    expect(k("2026-08-17")).toBe(0); // feriado
+    expect(k("2026-08-18")).toBe(390); // hábil normal
+    expect(k("2026-08-19")).toBe(0); // asueto
+    expect(k("2026-08-20")).toBe(0); // asueto (descripción Paro)
+    expect(k("2026-08-21")).toBe(0); // COMPLETA
+    expect(l("2026-08-21")).toBe(0); // COMPLETA → L 0:00
+    expect(k("2026-08-22")).toBe(390); // sábado habilitado → duracion_jornada
+    expect(k("2026-08-23")).toBe(0); // domingo
+    expect(k("2026-08-24")).toBe(390); // LAO
+    expect(k("2026-08-25")).toBe(210); // permiso
+    const filaSabOff = 13 + itemOff.resultado.dias.findIndex((d) => d.fecha === "2026-08-22");
+    expect(minutosDeValor(hojaOff.getCell(filaSabOff, 11).value)).toBe(0);
+  });
+
+  it("L en feriado/asueto: tope solo con marcación; sin marcación 0:00; LAO sin cambio; C4 y P usan L mostrada", async () => {
+    const item = mesDe({
+      anio: 2026,
+      mes: 8,
+      feriados: [{ fecha: "2026-08-17", descripcion: "Feriado" }],
+      asuetos: [
+        { fecha: "2026-08-19", descripcion: "Asueto" },
+        { fecha: "2026-08-20", descripcion: "Paro" },
+      ],
+      dias: [
+        dia("2026-08-17", "08:00", "12:00"),
+        { fecha: "2026-08-19", marcaciones: [], observacion: "" },
+        dia("2026-08-20", "09:00", "13:00"),
+        dia("2026-08-24", "08:00", "12:00", "LIC. ANUAL ORDINARIA"),
+      ],
+    });
+    const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const idx = (fecha) => 13 + item.resultado.dias.findIndex((d) => d.fecha === fecha);
+    const diaCalc = (fecha) => item.resultado.dias.find((d) => d.fecha === fecha);
+
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-17"), 12).value)).toBe(diaCalc("2026-08-17").Tope_Aplicable);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)).toBe(0);
+    expect(diaCalc("2026-08-19").Tope_Aplicable).toBeGreaterThan(0);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-20"), 12).value)).toBe(diaCalc("2026-08-20").Tope_Aplicable);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-24"), 12).value)).toBe(diaCalc("2026-08-24").Tope_Aplicable);
+
+    let sumaL = 0;
+    for (let i = 0; i < item.resultado.dias.length; i += 1) {
+      const v = hoja.getCell(13 + i, 12).value;
+      if (v !== null && v !== undefined) {
+        sumaL += minutosDeValor(v);
+      }
+    }
+    expect(minutosDeValor(hoja.getCell("C4").value)).toBe(sumaL);
+    expect(hoja.getCell("C4").value).toMatchObject({ formula: "SUM(L13:L43)" });
+
+    // Sábado 22/8: semana del 17 al 22; feriado 17 con tope, asueto 19 sin marcación → 0 en L.
+    const pSab = hoja.getCell(idx("2026-08-22"), 16).value;
+    expect(pSab).toMatchObject({ formula: `SUM(L${idx("2026-08-17")}:L${idx("2026-08-22")})` });
+    const esperadaP = minutosDeValor(hoja.getCell(idx("2026-08-17"), 12).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-18"), 12).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-20"), 12).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-21"), 12).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-22"), 12).value);
+    expect(minutosDeValor(pSab)).toBe(esperadaP);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)).toBe(0);
+  });
+
+  it("centrado de columnas de tabla salvo B y O; C4:C9 centrados", async () => {
+    const item = mesDe({
+      anio: 2026,
+      mes: 8,
+      dias: [dia("2026-08-18", "08:00", "17:10")],
+    });
+    const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const fila = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
+
+    expect(hoja.getCell(12, 1).alignment?.horizontal).toBe("center");
+    expect(hoja.getCell(12, 2).alignment?.horizontal).toBe("left");
+    expect(hoja.getCell(12, 15).alignment?.horizontal).toBe("left");
+    expect(hoja.getCell(fila, 1).alignment?.horizontal).toBe("center");
+    expect(hoja.getCell(fila, 2).alignment?.horizontal).toBe("left");
+    expect(hoja.getCell(fila, 11).alignment?.horizontal).toBe("center");
+    expect(hoja.getCell(fila, 15).alignment?.horizontal).toBe("left");
+    for (let filaTot = 4; filaTot <= 9; filaTot += 1) {
+      expect(hoja.getCell(filaTot, 3).alignment?.horizontal).toBe("center");
+    }
   });
 
   it("sumas semanales P y Q en sábado con result", async () => {

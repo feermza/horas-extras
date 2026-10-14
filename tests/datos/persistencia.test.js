@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ARCHIVO_GRUPOS_LEGADO, ARCHIVOS } from "../../src/datos/esquemas.js";
+import {
+  ARCHIVO_EVENTOS_LEGADO,
+  ARCHIVO_GRUPOS_LEGADO,
+  ARCHIVOS,
+} from "../../src/datos/esquemas.js";
 import {
   crearDirectorioMemoria,
   escribirWorkspace,
@@ -44,30 +48,43 @@ function directorioCon(parcial = {}) {
 }
 
 describe("ida y vuelta por texto", () => {
-  it("serializa, parsea y valida los cuatro archivos", () => {
+  it("serializa, parsea y valida los tres archivos", () => {
     const textos = textosDesdeWorkspace(workspaceSintetico);
     expect(Object.keys(textos).sort()).toEqual(
-      ["agentes", "calendario", "catalogos", "eventos"].sort(),
+      ["agentes", "calendario", "catalogos"].sort(),
     );
     const recuperado = workspaceDesdeTextos(textos);
     expect(recuperado).toEqual(workspaceSintetico);
   });
 
-  it("ignora alias, concepto y grupo al leer y no los escribe al guardar", () => {
+  it("ignora alias, concepto, grupo y tope_paro al leer y no los escribe al guardar", () => {
     const conLegados = structuredClone(workspaceSintetico.agentes);
     conLegados.agentes[0].alias = ["PEREZ, J."];
     conLegados.agentes[0].concepto = "PREST. COMPL.";
     conLegados.agentes[0].grupo = "grupo-1";
+    conLegados.agentes[0].configuraciones[0].tope_paro = "04:00";
     const textos = textosCompletos();
     textos.agentes = serializarJson(conLegados);
     const leido = workspaceDesdeTextos(textos);
     expect(leido.agentes.agentes[0].alias).toBeUndefined();
     expect(leido.agentes.agentes[0].concepto).toBeUndefined();
     expect(leido.agentes.agentes[0].grupo).toBeUndefined();
+    expect(leido.agentes.agentes[0].configuraciones[0].tope_paro).toBeUndefined();
     const escritos = textosDesdeWorkspace(leido);
     expect(escritos.agentes).not.toMatch(/"alias"/);
     expect(escritos.agentes).not.toMatch(/"concepto"/);
     expect(escritos.agentes).not.toMatch(/"grupo"/);
+    expect(escritos.agentes).not.toMatch(/"tope_paro"/);
+  });
+
+  it("ignora tope_especial en asuetos al leer y no lo escribe", () => {
+    const calendario = structuredClone(workspaceSintetico.calendario);
+    calendario.asuetos[0].tope_especial = "02:00";
+    const textos = textosCompletos();
+    textos.calendario = serializarJson(calendario);
+    const leido = workspaceDesdeTextos(textos);
+    expect(leido.calendario.asuetos[0].tope_especial).toBeUndefined();
+    expect(textosDesdeWorkspace(leido).calendario).not.toMatch(/"tope_especial"/);
   });
 
   it("guarda y lee nombre_reloj", async () => {
@@ -110,13 +127,25 @@ describe("File System Access (mock en memoria)", () => {
     expect(leido.leidos).not.toContain(ARCHIVO_GRUPOS_LEGADO);
   });
 
+  it("ignora un eventos.json legado al leer la carpeta", async () => {
+    const dir = directorioCon();
+    dir._archivos.set(
+      ARCHIVO_EVENTOS_LEGADO,
+      serializarJson({
+        eventos: [{ fecha: "2026-08-20", tipo: "PARO", descripcion: "x", tope_especial: null }],
+      }),
+    );
+    const leido = await leerWorkspace(dir);
+    expect(leido.workspace).toEqual(workspaceSintetico);
+    expect(leido.leidos).not.toContain(ARCHIVO_EVENTOS_LEGADO);
+    expect(dir._archivos.has(ARCHIVO_EVENTOS_LEGADO)).toBe(true);
+  });
+
   it("rechaza al leer si un archivo es inválido", async () => {
     const dir = directorioCon({
-      eventos: serializarJson({
-        eventos: [{ fecha: "2026-08-20", tipo: "FERIADO", descripcion: "x", tope_especial: null }],
-      }),
+      calendario: serializarJson({ feriados: [{ descripcion: "sin fecha" }] }),
     });
-    await expect(leerWorkspace(dir)).rejects.toThrow(/ASUETO o PARO/);
+    await expect(leerWorkspace(dir)).rejects.toThrow(/fecha/);
   });
 
   it("al leer informa leídos y faltantes sin devolver workspace", async () => {
@@ -131,12 +160,10 @@ describe("File System Access (mock en memoria)", () => {
       expect(err.leidos).toEqual([ARCHIVOS.agentes]);
       expect(err.faltantes).toEqual([
         ARCHIVOS.calendario,
-        ARCHIVOS.eventos,
         ARCHIVOS.catalogos,
       ]);
       expect(err.errores).toEqual([
         `${ARCHIVOS.calendario}: archivo no encontrado.`,
-        `${ARCHIVOS.eventos}: archivo no encontrado.`,
         `${ARCHIVOS.catalogos}: archivo no encontrado.`,
       ]);
     }
@@ -200,7 +227,7 @@ describe("resumenWorkspace", () => {
     expect(resumenWorkspace(workspaceSintetico)).toEqual({
       agentes: 1,
       feriados: 1,
-      eventos: 1,
+      asuetos: 1,
       justificaciones: workspaceSintetico.catalogos.justificaciones.length,
       permisos: workspaceSintetico.catalogos.permisos.length,
       nombre_libro: "Becas 540",

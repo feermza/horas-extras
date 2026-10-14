@@ -46,7 +46,6 @@ function cfgBase(parcial = {}) {
     sabado_tope: "00:00",
     tope_feriado: "04:00",
     tope_asueto: "04:00",
-    tope_paro: "04:00",
     tope_lao_receso: "08:00",
     valor_hora_base: 4500,
     ...parcial,
@@ -64,7 +63,7 @@ function calcular(parcial = {}) {
     observacion: parcial.observacion ?? "",
     configuraciones: parcial.configuraciones ?? [cfgBase(parcial.cfg)],
     feriados: parcial.feriados ?? [],
-    eventos: parcial.eventos ?? [],
+    asuetos: parcial.asuetos ?? [],
     catalogo: { ...catalogo, umbral_minimo: parcial.umbral ?? "00:50" },
   });
 }
@@ -80,12 +79,11 @@ function feriado(fecha, descripcion) {
 
 /**
  * @param {string} fecha
- * @param {"ASUETO"|"PARO"} tipo
- * @param {string|null} topeEspecial
+ * @param {string} [descripcion]
  * @returns {object[]}
  */
-function evento(fecha, tipo, topeEspecial) {
-  return [{ fecha, tipo, descripcion: tipo, tope_especial: topeEspecial }];
+function asueto(fecha, descripcion = "Asueto") {
+  return [{ fecha, descripcion }];
 }
 
 /**
@@ -372,20 +370,6 @@ describe("Anexo A.1", () => {
     expect(resultado.Hs_Trab).toBe(hm("3:30"));
   });
 
-  it("caso 18: asueto con tope especial 02:00", () => {
-    const resultado = calcular({
-      eventos: evento(FECHA_HABIL, "ASUETO", "02:00"),
-      marcaciones: [par("08:00", "11:00")],
-    });
-    expectColumnas(resultado, {
-      realizada: "3:00",
-      autorizada: "2:00",
-      computada: "2:00",
-      excedente: "1:00",
-      avisos: ["EXCEDENTE_SOBRE_TOPE"],
-    });
-  });
-
   it("caso 19: dos novedades en la misma fecha", () => {
     const resultado = calcular({
       observacion: "AUSENTE POR ENFERMEDAD DUELO",
@@ -455,10 +439,10 @@ describe("Anexo A.1", () => {
     });
   });
 
-  it("caso 24: licencia anual ordinaria en asueto con tope especial", () => {
+  it("caso 24: licencia anual ordinaria en asueto (tope_lao_receso)", () => {
     const resultado = calcular({
       observacion: "LIC. ANUAL ORDINARIA",
-      eventos: evento(FECHA_HABIL, "ASUETO", "02:00"),
+      asuetos: asueto(FECHA_HABIL, "Paro"),
       marcaciones: [par("08:00", "11:00")],
     });
     expectColumnas(resultado, {
@@ -540,33 +524,58 @@ describe("Anexo A.1", () => {
 });
 
 describe("derivadas del texto", () => {
-  it("un paro usa su tope y no el del asueto", () => {
-    const marcaciones = [par("08:00", "11:00")];
-    const cfg = { tope_paro: "01:30", tope_asueto: "04:00" };
-    const paro = calcular({
-      cfg,
-      eventos: evento(FECHA_HABIL, "PARO", null),
-      marcaciones,
+  it("un asueto con descripción de paro usa tope_asueto", () => {
+    const resultado = calcular({
+      cfg: { tope_asueto: "01:30" },
+      asuetos: asueto(FECHA_HABIL, "Paro"),
+      marcaciones: [par("08:00", "11:00")],
     });
-    const asueto = calcular({
-      cfg,
-      eventos: evento(FECHA_HABIL, "ASUETO", null),
-      marcaciones,
-    });
-    expectColumnas(paro, {
+    expectColumnas(resultado, {
       realizada: "3:00",
       autorizada: "1:30",
       computada: "1:30",
       excedente: "1:30",
       avisos: ["EXCEDENTE_SOBRE_TOPE"],
     });
-    expectColumnas(asueto, {
-      realizada: "3:00",
-      autorizada: "4:00",
-      computada: "3:00",
-      excedente: "0:00",
-      avisos: [],
-    });
+    expect(resultado.tipo).toBe("ASUETO");
+  });
+
+  it("justificación COMPLETA prevalece en sábado, domingo y feriado, con y sin marcaciones", () => {
+    const casos = [
+      { fecha: FECHA_SABADO, feriados: [], asuetos: [] },
+      { fecha: FECHA_DOMINGO, feriados: [], asuetos: [] },
+      { fecha: FECHA_HABIL, feriados: feriado(FECHA_HABIL, "Feriado"), asuetos: [] },
+    ];
+    for (const caso of casos) {
+      const conMarcas = calcular({
+        ...caso,
+        observacion: "AUSENTE POR ENFERMEDAD",
+        marcaciones: [par("08:00", "12:00")],
+      });
+      expectColumnas(conMarcas, {
+        realizada: "0:00",
+        autorizada: "0:00",
+        computada: "0:00",
+        excedente: "0:00",
+        avisos: ["MARCACIONES_EN_DIA_JUSTIFICADO"],
+      });
+      expect(conMarcas.factor).toBe(1);
+      expect(conMarcas.editable).toBe(false);
+
+      const sinMarcas = calcular({
+        ...caso,
+        observacion: "AUSENTE POR ENFERMEDAD",
+        marcaciones: [],
+      });
+      expectColumnas(sinMarcas, {
+        realizada: "0:00",
+        autorizada: "0:00",
+        computada: "0:00",
+        excedente: "0:00",
+        avisos: [],
+      });
+      expect(sinMarcas.editable).toBe(false);
+    }
   });
 
   it("el receso invernal en día hábil cuenta todo lo trabajado", () => {
@@ -584,20 +593,21 @@ describe("derivadas del texto", () => {
     expect(resultado.novedad.codigo).toBe("RECESO_INVERNAL");
   });
 
-  it("una justificación completa no modifica un día que no es hábil", () => {
+  it("una justificación completa en feriado anula realizadas y tope (factor 1)", () => {
     const resultado = calcular({
       observacion: "AUSENTE POR ENFERMEDAD",
       feriados: feriado(FECHA_HABIL, "Feriado de prueba"),
       marcaciones: [par("08:00", "11:00")],
     });
     expectColumnas(resultado, {
-      realizada: "3:00",
-      autorizada: "4:00",
-      computada: "3:00",
+      realizada: "0:00",
+      autorizada: "0:00",
+      computada: "0:00",
       excedente: "0:00",
-      factor: 2,
-      avisos: [],
+      factor: 1,
+      avisos: ["MARCACIONES_EN_DIA_JUSTIFICADO"],
     });
+    expect(resultado.editable).toBe(false);
   });
 
   it("un permiso parcial no modifica un día que no es hábil", () => {
@@ -730,32 +740,24 @@ describe("derivadas del texto", () => {
     expect(exceso).toBe("Excede horario");
   });
 
-  it("texto ajeno en feriado, asueto o paro no genera novedad ni aviso", () => {
+  it("texto ajeno en feriado o asueto no genera novedad ni aviso", () => {
     for (const caso of [
       {
-        fecha: FECHA_HABIL,
         feriados: feriado(FECHA_HABIL, "Feriado sintético"),
-        eventos: [],
+        asuetos: [],
         tipo: "FERIADO",
       },
       {
-        fecha: FECHA_HABIL,
         feriados: [],
-        eventos: evento(FECHA_HABIL, "ASUETO", null),
+        asuetos: asueto(FECHA_HABIL, "Paro"),
         tipo: "ASUETO",
-      },
-      {
-        fecha: FECHA_HABIL,
-        feriados: [],
-        eventos: evento(FECHA_HABIL, "PARO", null),
-        tipo: "PARO",
       },
     ]) {
       const observacion = "Fin de semana";
       const resultado = calcular({
-        fecha: caso.fecha,
+        fecha: FECHA_HABIL,
         feriados: caso.feriados,
-        eventos: caso.eventos,
+        asuetos: caso.asuetos,
         observacion,
         marcaciones: [par("08:00", "16:00")],
       });

@@ -3,7 +3,7 @@
  * No aplica el efecto de las novedades ni la excepción de la licencia anual.
  */
 
-/** @typedef {"FERIADO"|"ASUETO"|"PARO"|"SABADO"|"DOMINGO"|"HABIL_NORMAL"} TipoDia */
+/** @typedef {"FERIADO"|"ASUETO"|"SABADO"|"DOMINGO"|"HABIL_NORMAL"} TipoDia */
 
 /**
  * Tipos de día, en el orden de prioridad de la sección 3.3.
@@ -12,7 +12,6 @@
 export const TIPOS_DIA = Object.freeze({
   FERIADO: "FERIADO",
   ASUETO: "ASUETO",
-  PARO: "PARO",
   SABADO: "SABADO",
   DOMINGO: "DOMINGO",
   HABIL_NORMAL: "HABIL_NORMAL",
@@ -72,20 +71,19 @@ function exigirObjeto(valor, nombre) {
 
 /**
  * Determina el tipo de día solo por fecha.
- * Ante dos feriados, o dos eventos del mismo tipo, para la fecha pedida,
- * lanza Error: no elige uno. Un asueto y un paro el mismo día no es error.
+ * Ante dos feriados o dos asuetos para la fecha pedida, lanza Error: no elige uno.
  *
  * @param {string} fecha Fecha "AAAA-MM-DD".
  * @param {Array<{ fecha: string, descripcion?: string }>} feriados
- * @param {Array<{ fecha: string, tipo: string, descripcion?: string, tope_especial?: string|null }>} eventos
+ * @param {Array<{ fecha: string, descripcion?: string }>} asuetos
  * @returns {{ tipo: TipoDia, detalle: object|null }}
- * @throws {RangeError} Si la fecha pedida es inválida, las listas no son arreglos o un evento no es ASUETO ni PARO.
- * @throws {Error} Si hay dos feriados o dos eventos del mismo tipo en la fecha pedida.
+ * @throws {RangeError} Si la fecha pedida es inválida o las listas no son arreglos.
+ * @throws {Error} Si hay dos feriados o dos asuetos en la fecha pedida.
  */
-export function clasificarDia(fecha, feriados, eventos) {
+export function clasificarDia(fecha, feriados, asuetos) {
   const dia = diaDeLaSemana(fecha);
   exigirArreglo(feriados, "feriados");
-  exigirArreglo(eventos, "eventos");
+  exigirArreglo(asuetos, "asuetos");
 
   /** @type {Array<{ fecha: string, descripcion?: string }>} */
   const feriadosDelDia = [];
@@ -101,41 +99,23 @@ export function clasificarDia(fecha, feriados, eventos) {
   }
 
   /** @type {object[]} */
-  const asuetos = [];
-  /** @type {object[]} */
-  const paros = [];
-  for (let i = 0; i < eventos.length; i += 1) {
-    const evento = eventos[i];
-    exigirObjeto(evento, `eventos[${i}]`);
-    if (evento.tipo !== TIPOS_DIA.ASUETO && evento.tipo !== TIPOS_DIA.PARO) {
-      throw new RangeError(
-        `El tipo de evento debe ser ASUETO o PARO; se recibió ${JSON.stringify(evento.tipo)}.`,
-      );
-    }
-    if (evento.fecha !== fecha) {
-      continue;
-    }
-    if (evento.tipo === TIPOS_DIA.ASUETO) {
-      asuetos.push(evento);
-    } else {
-      paros.push(evento);
+  const asuetosDelDia = [];
+  for (let i = 0; i < asuetos.length; i += 1) {
+    const asueto = asuetos[i];
+    exigirObjeto(asueto, `asuetos[${i}]`);
+    if (asueto.fecha === fecha) {
+      asuetosDelDia.push(asueto);
     }
   }
-  if (asuetos.length > 1) {
-    throw new Error(`Hay ${asuetos.length} eventos ASUETO con la fecha ${fecha}.`);
-  }
-  if (paros.length > 1) {
-    throw new Error(`Hay ${paros.length} eventos PARO con la fecha ${fecha}.`);
+  if (asuetosDelDia.length > 1) {
+    throw new Error(`Hay ${asuetosDelDia.length} asuetos con la fecha ${fecha}.`);
   }
 
   if (feriadosDelDia.length === 1) {
     return { tipo: TIPOS_DIA.FERIADO, detalle: feriadosDelDia[0] };
   }
-  if (asuetos.length === 1) {
-    return { tipo: TIPOS_DIA.ASUETO, detalle: asuetos[0] };
-  }
-  if (paros.length === 1) {
-    return { tipo: TIPOS_DIA.PARO, detalle: paros[0] };
+  if (asuetosDelDia.length === 1) {
+    return { tipo: TIPOS_DIA.ASUETO, detalle: asuetosDelDia[0] };
   }
   if (dia === 6) {
     return { tipo: TIPOS_DIA.SABADO, detalle: null };

@@ -205,7 +205,7 @@ function valorHoraQueCubreElMes(configuraciones, fechas) {
  *   agentes: object[],
  *   archivo: { periodo: { anio: number, mes: number }, dias: object[] },
  *   feriados: object[],
- *   eventos: object[],
+ *   asuetos: object[],
  *   catalogo: object,
  *   finales?: object|Map<string, number>|null,
  * }} entrada
@@ -237,7 +237,7 @@ export function calcularMes(entrada) {
         observacion: fila?.observacion ?? "",
         configuraciones: agente.configuraciones,
         feriados: entrada.feriados,
-        eventos: entrada.eventos,
+        asuetos: entrada.asuetos,
         catalogo: entrada.catalogo,
       });
     } catch (error) {

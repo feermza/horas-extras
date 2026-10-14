@@ -27,7 +27,6 @@ export const workspaceSintetico = {
             sabado_tope: "00:00",
             tope_feriado: "04:00",
             tope_asueto: "04:00",
-            tope_paro: "04:00",
             tope_lao_receso: "08:00",
             valor_hora_base: 4500,
           },
@@ -42,14 +41,10 @@ export const workspaceSintetico = {
         descripcion: "Paso a la Inmortalidad del Gral. San Martín",
       },
     ],
-  },
-  eventos: {
-    eventos: [
+    asuetos: [
       {
-        fecha: "2026-08-20",
-        tipo: "ASUETO",
-        descripcion: "Asueto sintético",
-        tope_especial: null,
+        fecha: "2026-08-18",
+        descripcion: "Paro",
       },
     ],
   },

@@ -15,6 +15,7 @@ import { parsearDuracion, formatearHM } from "../motor/tiempo.js";
 import {
   armarMesesParaLibro,
   asociarNombreReloj,
+  corregirMarcaciones,
   diasARevisar,
   esCarpetaSinDatos,
   MENSAJE_CARPETA_SIN_DATOS,
@@ -58,7 +59,7 @@ const resumen = computed(() => (
 ));
 const agentes = computed(() => workspace.value?.agentes?.agentes ?? []);
 const feriados = computed(() => workspace.value?.calendario?.feriados ?? []);
-const eventos = computed(() => workspace.value?.eventos?.eventos ?? []);
+const asuetos = computed(() => workspace.value?.calendario?.asuetos ?? []);
 const tieneFsa = soportaFileSystemAccess();
 
 const paso1Hecho = computed(() => workspace.value !== null && carpeta.value !== null);
@@ -76,9 +77,30 @@ const listaRevisar = computed(() => {
   }
   const calculos = reconocidos.value
     .filter((e) => e.resultado !== null)
-    .map((e) => ({ resultado: e.resultado }));
+    .map((e) => ({ resultado: e.resultado, clave: e.clave }));
   return diasARevisar(calculos, umbral);
 });
+
+/** @type {import("vue").Ref<{ clave: string, fecha: string }|null>} */
+const edicion = ref(null);
+/** @type {import("vue").Ref<{
+ *   ingreso1: string,
+ *   salida1: string,
+ *   ingreso2: string,
+ *   salida2: string,
+ *   ingreso3: string,
+ *   salida3: string,
+ * }>} */
+const edicionCampos = ref({
+  ingreso1: "",
+  salida1: "",
+  ingreso2: "",
+  salida2: "",
+  ingreso3: "",
+  salida3: "",
+});
+/** @type {import("vue").Ref<Record<string, string>>} */
+const edicionErrores = ref({});
 
 /**
  * @returns {string}
@@ -172,6 +194,21 @@ function marcaParaMotor(minutos) {
 }
 
 /**
+ * Minutos a HH:MM estricto para los campos de corrección.
+ *
+ * @param {number|null|undefined} minutos
+ * @returns {string}
+ */
+function minutosAHhmm(minutos) {
+  if (minutos === null || minutos === undefined) {
+    return "";
+  }
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
  * @param {Awaited<ReturnType<typeof leerArchivoMensual>>} mensual
  * @returns {{ periodo: object, dias: object[] }}
  */
@@ -204,7 +241,7 @@ function recalcularEntrada(entrada, ws) {
     agentes: ws.agentes.agentes,
     archivo: archivoParaCalculo(entrada.mensual),
     feriados: ws.calendario.feriados,
-    eventos: ws.eventos.eventos,
+    asuetos: ws.calendario.asuetos ?? [],
     catalogo: ws.catalogos,
   });
   return { ...entrada, agente, resultado };
@@ -234,6 +271,8 @@ async function alElegirCarpeta() {
   carpeta.value = handle;
   nombreCarpeta.value = handle.name;
   entradas.value = [];
+  edicion.value = null;
+  edicionErrores.value = {};
 
   try {
     const leido = await leerWorkspace(handle);
@@ -289,6 +328,8 @@ async function alLeerExcels(evento) {
       nuevas.push(recalcularEntrada(base, workspace.value));
     }
     entradas.value = nuevas;
+    edicion.value = null;
+    edicionErrores.value = {};
     marcarOk(
       `Se leyeron ${nuevas.length} archivo(s) Excel (${horaActual()}). `
       + `${nuevas.filter((e) => e.agente).length} reconocido(s).`,
@@ -327,12 +368,84 @@ async function alAsociarAgente(entrada, evento) {
   }
 }
 
+/**
+ * @param {{ clave?: string, fecha: string }} item
+ */
+function alAbrirCorreccion(item) {
+  if (typeof item.clave !== "string") {
+    return;
+  }
+  const entrada = entradas.value.find((e) => e.clave === item.clave);
+  if (entrada === undefined) {
+    return;
+  }
+  const dia = entrada.mensual.dias.find((d) => d.fecha === item.fecha);
+  const pares = dia?.marcaciones ?? [{}, {}, {}];
+  edicion.value = { clave: item.clave, fecha: item.fecha };
+  edicionCampos.value = {
+    ingreso1: minutosAHhmm(pares[0]?.ingreso),
+    salida1: minutosAHhmm(pares[0]?.salida),
+    ingreso2: minutosAHhmm(pares[1]?.ingreso),
+    salida2: minutosAHhmm(pares[1]?.salida),
+    ingreso3: minutosAHhmm(pares[2]?.ingreso),
+    salida3: minutosAHhmm(pares[2]?.salida),
+  };
+  edicionErrores.value = {};
+}
+
+function alCancelarCorreccion() {
+  edicion.value = null;
+  edicionErrores.value = {};
+}
+
+function alAplicarCorreccion() {
+  if (edicion.value === null || workspace.value === null) {
+    return;
+  }
+  const indice = entradas.value.findIndex((e) => e.clave === edicion.value?.clave);
+  if (indice === -1) {
+    return;
+  }
+  const entrada = entradas.value[indice];
+  const resultado = corregirMarcaciones(
+    entrada.mensual,
+    edicion.value.fecha,
+    edicionCampos.value,
+  );
+  if (!resultado.ok) {
+    /** @type {Record<string, string>} */
+    const mapa = {};
+    for (const err of resultado.errores) {
+      mapa[err.campo] = err.mensaje;
+    }
+    edicionErrores.value = mapa;
+    return;
+  }
+  const fechaCorregida = edicion.value.fecha;
+  const actualizada = recalcularEntrada(
+    { ...entrada, mensual: resultado.archivo },
+    workspace.value,
+  );
+  const copia = [...entradas.value];
+  copia[indice] = actualizada;
+  entradas.value = copia;
+  edicion.value = null;
+  edicionErrores.value = {};
+  marcarOk(`Marcaciones de ${fechaCorregida} actualizadas (${horaActual()}).`);
+}
+
 async function alDescargarLibro() {
   if (workspace.value === null) {
     marcarError(new Error("No hay datos cargados."));
     return;
   }
-  const meses = armarMesesParaLibro(entradas.value);
+  const meses = armarMesesParaLibro(
+    entradas.value.map((e) => ({
+      agente: e.agente,
+      resultado: e.resultado,
+      archivo: e.mensual,
+    })),
+  );
   if (meses.length === 0) {
     marcarError(new Error("No hay archivos con agente reconocido."));
     return;
@@ -482,9 +595,59 @@ function horaTexto(minutos) {
 
       <div v-if="listaRevisar.length > 0" class="revisar">
         <h3>Días a revisar</h3>
-        <ul>
-          <li v-for="(item, i) in listaRevisar" :key="i">
-            {{ item.agente }} — {{ item.fecha }}: {{ item.texto }}
+        <ul class="lista-revisar">
+          <li v-for="(item, i) in listaRevisar" :key="i" class="item-revisar">
+            <div class="item-revisar-cabecera">
+              <span>{{ item.agente }} — {{ item.fecha }}: {{ item.texto }}</span>
+              <button
+                type="button"
+                :disabled="!item.clave"
+                @click="alAbrirCorreccion(item)"
+              >
+                Corregir
+              </button>
+            </div>
+            <div
+              v-if="edicion && edicion.clave === item.clave && edicion.fecha === item.fecha"
+              class="form-correccion"
+            >
+              <div class="campos-marca">
+                <label>
+                  Ingreso 1
+                  <input v-model="edicionCampos.ingreso1" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.ingreso1" class="err-campo">{{ edicionErrores.ingreso1 }}</span>
+                </label>
+                <label>
+                  Salida 1
+                  <input v-model="edicionCampos.salida1" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.salida1" class="err-campo">{{ edicionErrores.salida1 }}</span>
+                </label>
+                <label>
+                  Ingreso 2
+                  <input v-model="edicionCampos.ingreso2" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.ingreso2" class="err-campo">{{ edicionErrores.ingreso2 }}</span>
+                </label>
+                <label>
+                  Salida 2
+                  <input v-model="edicionCampos.salida2" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.salida2" class="err-campo">{{ edicionErrores.salida2 }}</span>
+                </label>
+                <label>
+                  Ingreso 3
+                  <input v-model="edicionCampos.ingreso3" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.ingreso3" class="err-campo">{{ edicionErrores.ingreso3 }}</span>
+                </label>
+                <label>
+                  Salida 3
+                  <input v-model="edicionCampos.salida3" type="text" placeholder="HH:MM">
+                  <span v-if="edicionErrores.salida3" class="err-campo">{{ edicionErrores.salida3 }}</span>
+                </label>
+              </div>
+              <div class="acciones">
+                <button type="button" @click="alAplicarCorreccion">Aplicar</button>
+                <button type="button" @click="alCancelarCorreccion">Cancelar</button>
+              </div>
+            </div>
           </li>
         </ul>
       </div>
@@ -539,7 +702,7 @@ function horaTexto(minutos) {
         <ul>
           <li>Agentes: {{ resumen.agentes }}</li>
           <li>Feriados: {{ resumen.feriados }}</li>
-          <li>Eventos: {{ resumen.eventos }}</li>
+          <li>Asuetos: {{ resumen.asuetos }}</li>
           <li>Justificaciones: {{ resumen.justificaciones }}</li>
           <li>Permisos: {{ resumen.permisos }}</li>
           <li>Nombre del libro: {{ resumen.nombre_libro }}</li>
@@ -577,11 +740,11 @@ function horaTexto(minutos) {
           </li>
         </ul>
 
-        <h4>Eventos</h4>
+        <h4>Asuetos</h4>
         <ul>
-          <li v-for="(evento, ie) in eventos" :key="'ev-' + ie">
-            {{ evento.fecha }} — {{ evento.tipo }}
-            <template v-if="evento.descripcion"> — {{ evento.descripcion }}</template>
+          <li v-for="(asueto, ia) in asuetos" :key="'as-' + ia">
+            {{ asueto.fecha }}
+            <template v-if="asueto.descripcion"> — {{ asueto.descripcion }}</template>
           </li>
         </ul>
       </section>
@@ -707,6 +870,45 @@ button:disabled {
 .revisar h3 {
   margin: 0 0 0.35rem;
   font-size: 1rem;
+}
+.lista-revisar {
+  list-style: none;
+  padding: 0;
+}
+.item-revisar {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+}
+.item-revisar-cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.form-correccion {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #ccc;
+}
+.campos-marca {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.5rem;
+}
+.campos-marca label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  gap: 0.15rem;
+}
+.campos-marca input {
+  padding: 0.25rem;
+}
+.err-campo {
+  color: #800;
+  font-size: 0.75rem;
 }
 .archivos ul,
 .resumen ul,

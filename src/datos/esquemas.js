@@ -10,14 +10,12 @@ import { normalizarTexto } from "../motor/texto.js";
 export const ARCHIVOS = Object.freeze({
   agentes: "agentes.json",
   calendario: "calendario.json",
-  eventos: "eventos.json",
   catalogos: "catalogos.json",
 });
 
-/** Nombre legado que se ignora si aparece en la carpeta. */
+/** Nombres legados que se ignoran si aparecen en la carpeta. */
 export const ARCHIVO_GRUPOS_LEGADO = "grupos.json";
-
-const TIPOS_EVENTO = new Set(["ASUETO", "PARO"]);
+export const ARCHIVO_EVENTOS_LEGADO = "eventos.json";
 
 const CAMPOS_HORA_CONFIG = ["horario_inicio", "horario_fin"];
 const CAMPOS_DURACION_CONFIG = [
@@ -26,7 +24,6 @@ const CAMPOS_DURACION_CONFIG = [
   "sabado_tope",
   "tope_feriado",
   "tope_asueto",
-  "tope_paro",
   "tope_lao_receso",
 ];
 
@@ -222,36 +219,19 @@ export function validarCalendario(datos) {
       errores.push(`feriados[${i}]: fecha es obligatoria.`);
     }
   }
-  return errores.length === 0 ? { ok: true } : { ok: false, errores };
-}
-
-/**
- * @param {unknown} datos
- * @returns {{ ok: true } | { ok: false, errores: string[] }}
- */
-export function validarEventos(datos) {
-  /** @type {string[]} */
-  const errores = [];
-  if (datos === null || typeof datos !== "object" || Array.isArray(datos)) {
-    return { ok: false, errores: ["eventos.json: se esperaba un objeto con la clave eventos."] };
+  if (datos.asuetos !== undefined && datos.asuetos !== null && !Array.isArray(datos.asuetos)) {
+    errores.push("calendario.json: asuetos debe ser un arreglo si está presente.");
   }
-  if (!Array.isArray(datos.eventos)) {
-    return { ok: false, errores: ["eventos.json: falta el arreglo eventos."] };
-  }
-  for (let i = 0; i < datos.eventos.length; i += 1) {
-    const evento = datos.eventos[i];
-    if (evento === null || typeof evento !== "object" || Array.isArray(evento)) {
-      errores.push(`eventos[${i}]: debe ser un objeto.`);
-      continue;
-    }
-    if (typeof evento.fecha !== "string" || evento.fecha === "") {
-      errores.push(`eventos[${i}]: fecha es obligatoria.`);
-    }
-    if (!TIPOS_EVENTO.has(evento.tipo)) {
-      errores.push(`eventos[${i}]: tipo debe ser ASUETO o PARO.`);
-    }
-    if (!estaVacio(evento.tope_especial) && !esDuracionValida(evento.tope_especial)) {
-      errores.push(`eventos[${i}]: tope_especial debe ser HH:MM o vacío.`);
+  if (Array.isArray(datos.asuetos)) {
+    for (let i = 0; i < datos.asuetos.length; i += 1) {
+      const asueto = datos.asuetos[i];
+      if (asueto === null || typeof asueto !== "object" || Array.isArray(asueto)) {
+        errores.push(`asuetos[${i}]: debe ser un objeto.`);
+        continue;
+      }
+      if (typeof asueto.fecha !== "string" || asueto.fecha === "") {
+        errores.push(`asuetos[${i}]: fecha es obligatoria.`);
+      }
     }
   }
   return errores.length === 0 ? { ok: true } : { ok: false, errores };
@@ -305,12 +285,11 @@ export function validarCatalogos(datos) {
 }
 
 /**
- * Valida los cuatro archivos de la sección 5.
+ * Valida los tres archivos de la sección 5.
  *
  * @param {{
  *   agentes: unknown,
  *   calendario: unknown,
- *   eventos: unknown,
  *   catalogos: unknown,
  * }} workspace
  * @returns {{ ok: true } | { ok: false, errores: string[] }}
@@ -319,7 +298,6 @@ export function validarWorkspace(workspace) {
   const partes = [
     validarAgentes(workspace.agentes),
     validarCalendario(workspace.calendario),
-    validarEventos(workspace.eventos),
     validarCatalogos(workspace.catalogos),
   ];
   /** @type {string[]} */
