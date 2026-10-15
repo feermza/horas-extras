@@ -47,6 +47,8 @@ Las reglas de negocio viven solo en docs/especificacion-v5.md.
 - Pre-fase 6 (B): cada agente tiene nombre_reloj obligatorio y único (normalizado); la identificación del archivo exportado usa ese campo.
 - Pre-fase 6: se eliminan concepto, grupo y grupos.json; nombre_libro (obligatorio) y horas_maximas (opcional) viven en catalogos.json; un grupos.json legado en la carpeta se ignora.
 - Fase 6: leerArchivoMensual lee fechas y horas con métodos UTC; las horas se redondean al segundo y se truncan al minuto para no perder 14:49 por coma flotante.
+- Ajuste fase 6: en columnas E–J, una celda que no es hora de Excel no lanza error: se devuelve el texto recortado. El motor bloquea solo esa fecha; textoCampoMarcacion/marcaParaCalculo en flujo.js pasan el texto a Corregir y a calcularMes; generarLibro escribe el texto tal cual en la fila roja.
+- Ajuste fase 6 (2): textoMarcacion en flujo.js muestra minutos, null o texto sin lanzar; App.vue la usa en el panel de diagnóstico (antes horaTexto → formatearHM rompía el render con "xxx").
 - Se elimina la importación del libro devuelto, la hoja Control, emision-*.json y la fase 9: el libro que devuelve el jefe es la planilla final.
 - El informe individual pasa a columnas A–T (finales en N, computadas en S, sumas semanales P/Q); el Resumen es el IMTHE y apunta a las horas finales.
 - Supuesto 1 confirmado: cada hora de feriado cuenta por dos (horas equivalentes).

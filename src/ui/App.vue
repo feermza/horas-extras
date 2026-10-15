@@ -12,7 +12,7 @@ import {
 import { generarLibro } from "../excel/generarLibro.js";
 import { leerArchivoMensual } from "../excel/importarMensual.js";
 import { calcularMes, identificarAgente } from "../motor/calculoMes.js";
-import { parsearDuracion, formatearHM } from "../motor/tiempo.js";
+import { parsearDuracion } from "../motor/tiempo.js";
 import {
   agregarNuevaConfiguracion,
   crearAgenteNuevo,
@@ -31,6 +31,9 @@ import {
   asociarNombreReloj,
   corregirMarcaciones,
   diasARevisar,
+  marcaParaCalculo,
+  textoCampoMarcacion,
+  textoMarcacion,
   esCarpetaSinDatos,
   MENSAJE_CARPETA_SIN_DATOS,
 } from "./flujo.js";
@@ -227,28 +230,6 @@ function textoOGuion(valor) {
  * @param {number|null} minutos
  * @returns {string|null}
  */
-function marcaParaMotor(minutos) {
-  if (minutos === null || minutos === undefined) {
-    return null;
-  }
-  return formatearHM(minutos);
-}
-
-/**
- * Minutos a HH:MM estricto para los campos de corrección.
- *
- * @param {number|null|undefined} minutos
- * @returns {string}
- */
-function minutosAHhmm(minutos) {
-  if (minutos === null || minutos === undefined) {
-    return "";
-  }
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
 /**
  * @param {Awaited<ReturnType<typeof leerArchivoMensual>>} mensual
  * @returns {{ periodo: object, dias: object[] }}
@@ -260,8 +241,8 @@ function archivoParaCalculo(mensual) {
       fecha: d.fecha,
       observacion: d.observacion,
       marcaciones: d.marcaciones.map((par) => ({
-        ingreso: marcaParaMotor(par.ingreso),
-        salida: marcaParaMotor(par.salida),
+        ingreso: marcaParaCalculo(par.ingreso),
+        salida: marcaParaCalculo(par.salida),
       })),
     })),
   };
@@ -424,12 +405,12 @@ function alAbrirCorreccion(item) {
   const pares = dia?.marcaciones ?? [{}, {}, {}];
   edicion.value = { clave: item.clave, fecha: item.fecha };
   edicionCampos.value = {
-    ingreso1: minutosAHhmm(pares[0]?.ingreso),
-    salida1: minutosAHhmm(pares[0]?.salida),
-    ingreso2: minutosAHhmm(pares[1]?.ingreso),
-    salida2: minutosAHhmm(pares[1]?.salida),
-    ingreso3: minutosAHhmm(pares[2]?.ingreso),
-    salida3: minutosAHhmm(pares[2]?.salida),
+    ingreso1: textoCampoMarcacion(pares[0]?.ingreso),
+    salida1: textoCampoMarcacion(pares[0]?.salida),
+    ingreso2: textoCampoMarcacion(pares[1]?.ingreso),
+    salida2: textoCampoMarcacion(pares[1]?.salida),
+    ingreso3: textoCampoMarcacion(pares[2]?.ingreso),
+    salida3: textoCampoMarcacion(pares[2]?.salida),
   };
   edicionErrores.value = {};
 }
@@ -542,17 +523,6 @@ async function alGuardarEnCarpeta() {
   } catch (err) {
     marcarError(err);
   }
-}
-
-/**
- * @param {number|null} minutos
- * @returns {string}
- */
-function horaTexto(minutos) {
-  if (minutos === null || minutos === undefined) {
-    return "";
-  }
-  return formatearHM(minutos);
 }
 
 function cargarBorradoresDesdeWorkspace() {
@@ -1207,8 +1177,8 @@ function alQuitarFilaCalendario(lista, indice) {
               <tbody>
                 <tr v-for="dia in entrada.mensual.dias" :key="dia.fecha">
                   <td>{{ dia.fecha }}</td>
-                  <td>{{ horaTexto(dia.marcaciones[0].ingreso) }}</td>
-                  <td>{{ horaTexto(dia.marcaciones[0].salida) }}</td>
+                  <td>{{ textoMarcacion(dia.marcaciones[0].ingreso) }}</td>
+                  <td>{{ textoMarcacion(dia.marcaciones[0].salida) }}</td>
                   <td>{{ dia.observacion }}</td>
                 </tr>
               </tbody>

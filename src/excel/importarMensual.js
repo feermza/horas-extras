@@ -147,8 +147,11 @@ function leerFecha(celda) {
 }
 
 /**
+ * Hora de Excel → minutos 0–1439; vacía → null; cualquier otro valor → texto recortado
+ * (no lanza: el motor bloquea solo esa fecha con DATOS_HORARIOS_IMPOSIBLES).
+ *
  * @param {import("exceljs").Cell} celda
- * @returns {number|null}
+ * @returns {number|string|null}
  */
 function leerHora(celda) {
   const valor = celda.value;
@@ -161,9 +164,8 @@ function leerHora(celda) {
   if (typeof valor === "number" && Number.isFinite(valor)) {
     return minutosDesdeFraccion(valor);
   }
-  throw new Error(
-    `La celda ${direccion(celda)} de hora no tiene el tipo esperado (se esperaba una hora de Excel).`,
-  );
+  const texto = textoDeCelda(valor).trim();
+  return texto === "" ? null : texto;
 }
 
 /**
@@ -175,7 +177,7 @@ function leerHora(celda) {
  *   periodo: { anio: number, mes: number },
  *   dias: Array<{
  *     fecha: string,
- *     marcaciones: Array<{ ingreso: number|null, salida: number|null }>,
+ *     marcaciones: Array<{ ingreso: number|string|null, salida: number|string|null }>,
  *     observacion: string,
  *   }>,
  * }>}
@@ -190,7 +192,7 @@ export async function leerArchivoMensual(buffer) {
   }
   exigirEncabezados(hoja);
 
-  /** @type {Array<{ fecha: string, marcaciones: Array<{ ingreso: number|null, salida: number|null }>, observacion: string }>} */
+  /** @type {Array<{ fecha: string, marcaciones: Array<{ ingreso: number|string|null, salida: number|string|null }>, observacion: string }>} */
   const dias = [];
   let nombre = "";
 
@@ -204,7 +206,7 @@ export async function leerArchivoMensual(buffer) {
     if (dias.length === 0) {
       nombre = textoDeCelda(fila.getCell(COL_NOMBRE).value);
     }
-    /** @type {Array<{ ingreso: number|null, salida: number|null }>} */
+    /** @type {Array<{ ingreso: number|string|null, salida: number|string|null }>} */
     const marcaciones = [];
     for (const [colIngreso, colSalida] of PARES) {
       marcaciones.push({

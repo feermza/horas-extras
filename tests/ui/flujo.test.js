@@ -8,15 +8,17 @@ import {
   leerWorkspace,
 } from "../../src/datos/persistencia.js";
 import { generarLibro } from "../../src/excel/generarLibro.js";
-import { calcularMes } from "../../src/motor/calculoMes.js";
-import { formatearHM } from "../../src/motor/tiempo.js";
+import { calcularMes, identificarAgente } from "../../src/motor/calculoMes.js";
 import {
   armarMesesParaLibro,
   asociarNombreReloj,
   corregirMarcaciones,
   diasARevisar,
   esCarpetaSinDatos,
+  marcaParaCalculo,
   MENSAJE_CARPETA_SIN_DATOS,
+  textoCampoMarcacion,
+  textoMarcacion,
 } from "../../src/ui/flujo.js";
 import { catalogo as catalogoBase } from "../motor/fixtures/catalogo.js";
 
@@ -38,6 +40,18 @@ describe("asociarNombreReloj", () => {
 
   it("lanza si el id no existe", () => {
     expect(() => asociarNombreReloj(workspaceSintetico, "X", "A")).toThrow(/id/);
+  });
+});
+
+describe("textoMarcacion", () => {
+  it("formatea null, minutos y texto sin lanzar", () => {
+    expect(textoMarcacion(null)).toBe("");
+    expect(textoMarcacion(undefined)).toBe("");
+    expect(textoMarcacion(510)).toBe("8:30");
+    expect(textoMarcacion("xxx")).toBe("xxx");
+    expect(textoMarcacion(-1)).toBe("-1");
+    expect(() => textoMarcacion("xxx")).not.toThrow();
+    expect(() => textoMarcacion({})).not.toThrow();
   });
 });
 
@@ -159,8 +173,8 @@ describe("corregirMarcaciones", () => {
           fecha: d.fecha,
           observacion: d.observacion,
           marcaciones: d.marcaciones.map((par) => ({
-            ingreso: par.ingreso === null ? null : formatearHM(par.ingreso),
-            salida: par.salida === null ? null : formatearHM(par.salida),
+            ingreso: marcaParaCalculo(par.ingreso),
+            salida: marcaParaCalculo(par.salida),
           })),
         })),
       },
@@ -247,6 +261,74 @@ describe("corregirMarcaciones", () => {
     const dia = despues.dias.find((d) => d.fecha === "2026-08-18");
     expect(dia.avisos.some((a) => a.codigo === "MARCACIONES_INCOMPLETAS")).toBe(false);
     expect(dia.Hs_Extra_Realizada).toBe(0);
+  });
+
+  it("hora ilegible aparece en diasARevisar; Corregir muestra el texto; Aplicar lo resuelve o rechaza", () => {
+    const mensual = {
+      nombre: "PEREZ, JUAN",
+      periodo: { anio: 2026, mes: 8 },
+      dias: [
+        {
+          fecha: "2026-08-18",
+          observacion: "",
+          marcaciones: [
+            { ingreso: "xxx", salida: 1030 },
+            { ingreso: null, salida: null },
+            { ingreso: null, salida: null },
+          ],
+        },
+        {
+          fecha: "2026-08-19",
+          observacion: "",
+          marcaciones: [
+            { ingreso: 480, salida: 1030 },
+            { ingreso: null, salida: null },
+            { ingreso: null, salida: null },
+          ],
+        },
+      ],
+    };
+    expect(textoCampoMarcacion(mensual.dias[0].marcaciones[0].ingreso)).toBe("xxx");
+    expect(textoCampoMarcacion(mensual.dias[0].marcaciones[0].salida)).toBe("17:10");
+
+    const resultado = calcular(mensual);
+    expect(identificarAgente(mensual.nombre, [agente])).not.toBeNull();
+    const diaBloq = resultado.dias.find((d) => d.fecha === "2026-08-18");
+    const diaOk = resultado.dias.find((d) => d.fecha === "2026-08-19");
+    expect(diaBloq.bloqueante).toBe("DATOS_HORARIOS_IMPOSIBLES");
+    expect(diaOk.bloqueante).toBeNull();
+    expect(diaOk.Hs_Extra_Realizada).toBe(160);
+
+    const lista = diasARevisar([{ resultado, clave: "f1" }], 50);
+    expect(lista.some((f) => f.fecha === "2026-08-18" && f.texto === "DATOS_HORARIOS_IMPOSIBLES")).toBe(true);
+
+    const mal = corregirMarcaciones(mensual, "2026-08-18", {
+      ingreso1: "xxx",
+      salida1: "17:10",
+      ingreso2: "",
+      salida2: "",
+      ingreso3: "",
+      salida3: "",
+    });
+    expect(mal.ok).toBe(false);
+    expect(mal.errores[0].campo).toBe("ingreso1");
+    expect(mal.errores[0].mensaje).toMatch(/HH:MM/i);
+    expect(mensual.dias[0].marcaciones[0].ingreso).toBe("xxx");
+
+    const bien = corregirMarcaciones(mensual, "2026-08-18", {
+      ingreso1: "08:30",
+      salida1: "17:10",
+      ingreso2: "",
+      salida2: "",
+      ingreso3: "",
+      salida3: "",
+    });
+    expect(bien.ok).toBe(true);
+    expect(bien.archivo.dias[0].marcaciones[0]).toEqual({ ingreso: 510, salida: 1030 });
+    const despues = calcular(bien.archivo);
+    expect(despues.dias.find((d) => d.fecha === "2026-08-18").bloqueante).toBeNull();
+    expect(diasARevisar([{ resultado: despues, clave: "f1" }], 50)
+      .some((f) => f.fecha === "2026-08-18")).toBe(false);
   });
 
   it("rechaza hora inválida sin cambiar el archivo", () => {

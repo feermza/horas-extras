@@ -432,6 +432,64 @@ describe("generarLibro", () => {
     expect(hoja.getCell(fila, 12).border?.left?.color?.argb).not.toBe("FF9FB0C3");
   });
 
+  it("fila bloqueada con texto en marcación: rojo, texto en celda, L bloqueada y totales ok", async () => {
+    const agentes = [agente()];
+    const archivo = {
+      periodo: { anio: 2026, mes: 8 },
+      dias: [
+        {
+          fecha: "2026-08-18",
+          marcaciones: [{ ingreso: "xxx", salida: 1030 }],
+          observacion: "",
+        },
+        {
+          fecha: "2026-08-19",
+          marcaciones: [{ ingreso: 480, salida: 1030 }],
+          observacion: "",
+        },
+      ],
+    };
+    const resultado = calcularMes({
+      nombre: agentes[0].nombre_reloj,
+      agentes,
+      archivo: {
+        periodo: archivo.periodo,
+        dias: archivo.dias.map((d) => ({
+          fecha: d.fecha,
+          observacion: d.observacion,
+          marcaciones: d.marcaciones.map((par) => ({
+            ingreso: typeof par.ingreso === "number"
+              ? `${String(Math.floor(par.ingreso / 60)).padStart(2, "0")}:${String(par.ingreso % 60).padStart(2, "0")}`
+              : par.ingreso,
+            salida: typeof par.salida === "number"
+              ? `${String(Math.floor(par.salida / 60)).padStart(2, "0")}:${String(par.salida % 60).padStart(2, "0")}`
+              : par.salida,
+          })),
+        })),
+      },
+      feriados: [],
+      asuetos: [],
+      catalogo: CATALOGO,
+    });
+    const item = { resultado, archivo };
+    const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const filaBloq = filaDe(resultado, "2026-08-18");
+    const filaOk = filaDe(resultado, "2026-08-19");
+
+    expect(resultado.dias.find((d) => d.fecha === "2026-08-18").bloqueante)
+      .toBe("DATOS_HORARIOS_IMPOSIBLES");
+    expect(hoja.getCell(filaBloq, 1).fill?.fgColor?.argb).toBe("FFF8D7D7");
+    expect(hoja.getCell(filaBloq, 3).value).toBe("xxx");
+    expect(minutosDeValor(hoja.getCell(filaBloq, 4).value)).toBe(1030);
+    expect(minutosDeValor(hoja.getCell(filaBloq, 11).value)).toBe(0);
+    expect(hoja.getCell(filaBloq, 12).protection?.locked).not.toBe(false);
+    expect(minutosDeValor(hoja.getCell(filaOk, 11).value)).toBe(160);
+    expect(minutosDeValor(hoja.getCell("L4").value)).toBe(resultado.totales.realizadas);
+    expect(resultado.totales.realizadas).toBe(160);
+  });
+
   it("I usa jornadaExigible del permiso; I en 0:00 según reglas de presentación", async () => {
     const ag = agente({
       configuraciones: [configuracion({

@@ -210,4 +210,25 @@ describe("leerArchivoMensual con libros en memoria", () => {
     expect(resultado.dias[0].marcaciones[0].ingreso).toBe(14 * 60 + 49);
     expect(formatearHM(resultado.dias[0].marcaciones[0].ingreso)).toBe("14:49");
   });
+
+  it("devuelve el texto de una hora ilegible y no lanza; vacías y válidas no cambian", async () => {
+    const buffer = await armarLibro({
+      filas: [{
+        fecha: fechaExcel(2026, 8, 1),
+        e: "xxx",
+        f: horaExcel(17, 10),
+        g: null,
+        h: null,
+      }],
+    });
+    const resultado = await leerArchivoMensual(buffer);
+    expect(resultado.dias[0].marcaciones[0]).toEqual({
+      ingreso: "xxx",
+      salida: 17 * 60 + 10,
+    });
+    expect(resultado.dias[0].marcaciones[1]).toEqual({
+      ingreso: null,
+      salida: null,
+    });
+  });
 });

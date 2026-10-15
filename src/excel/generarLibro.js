@@ -189,6 +189,14 @@ function minutosDeMarca(valor) {
 }
 
 /**
+ * @param {unknown} valor
+ * @returns {boolean}
+ */
+function marcaCargada(valor) {
+  return valor !== null && valor !== undefined && valor !== "";
+}
+
+/**
  * @param {import("exceljs").Cell} celda
  * @param {number|null|undefined} minutos
  */
@@ -199,6 +207,25 @@ function escribirHora(celda, minutos) {
   }
   celda.value = fraccionDia(minutos);
   celda.numFmt = FMT_HORA;
+}
+
+/**
+ * Escribe minutos como hora de Excel, o el texto original si no es interpretable.
+ *
+ * @param {import("exceljs").Cell} celda
+ * @param {unknown} valor
+ */
+function escribirMarca(celda, valor) {
+  if (!marcaCargada(valor)) {
+    celda.value = null;
+    return;
+  }
+  const minutos = minutosDeMarca(valor);
+  if (minutos !== null) {
+    escribirHora(celda, minutos);
+    return;
+  }
+  celda.value = typeof valor === "string" ? valor : String(valor).trim();
 }
 
 /**
@@ -429,7 +456,7 @@ function esLaoOReceso(novedad) {
  */
 function tieneMarcacionCargada(marcaciones) {
   for (const par of marcaciones ?? []) {
-    if (minutosDeMarca(par.ingreso) !== null || minutosDeMarca(par.salida) !== null) {
+    if (marcaCargada(par.ingreso) || marcaCargada(par.salida)) {
       return true;
     }
   }
@@ -741,8 +768,8 @@ function llenarHojaAgente(hoja, entrada) {
 
     for (let p = 0; p < 3; p += 1) {
       const par = marcaciones[p] ?? {};
-      escribirHora(hoja.getCell(fila, 3 + p * 2), minutosDeMarca(par.ingreso));
-      escribirHora(hoja.getCell(fila, 4 + p * 2), minutosDeMarca(par.salida));
+      escribirMarca(hoja.getCell(fila, 3 + p * 2), par.ingreso);
+      escribirMarca(hoja.getCell(fila, 4 + p * 2), par.salida);
     }
 
     escribirHora(hoja.getCell(fila, 9), minutosJornadaMostrada(dia, cfg));

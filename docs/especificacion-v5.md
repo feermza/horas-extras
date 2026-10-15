@@ -121,7 +121,7 @@ Cada archivo corresponde a un agente y a un mes. Datos a extraer:
 
 No se leen las columnas C, D, K, L, M ni N. El día de la semana se obtiene de la fecha; el turno no se usa. `Observaciones` se conserva íntegra. Si la salida de un par ocurre después de la medianoche, figura igualmente en la fila del día de ingreso. La columna Observaciones trae también textos automáticos del sistema de origen (horario, fin de semana, marcaciones, feriados, etc.). Solo se reconocen las justificaciones, los permisos y la licencia/receso del catálogo (Anexo B); el resto del texto se conserva y se muestra sin efecto sobre el cálculo. Feriados y asuetos se determinan únicamente por el calendario.
 
-**Columnas fijas** (encabezados en la fila 1; datos desde la fila 2 hasta la última con fecha): A `Nombre`, B `Fecha`, E–F / G–H / I–J `Ingreso`/`Salida` 1, 2 y 3, O `Observaciones`. Las fechas y las horas son valores de Excel (las horas pueden estar vacías).
+**Columnas fijas** (encabezados en la fila 1; datos desde la fila 2 hasta la última con fecha): A `Nombre`, B `Fecha`, E–F / G–H / I–J `Ingreso`/`Salida` 1, 2 y 3, O `Observaciones`. Las fechas son valores de Excel. Las horas de marcación pueden estar vacías, ser hora de Excel, u otro contenido (texto, etc.).
 
 ```
 leerArchivoMensual(buffer) -> {
@@ -129,7 +129,7 @@ leerArchivoMensual(buffer) -> {
   periodo,           // { anio, mes } de la primera fecha
   dias: [ {
     fecha,           // "AAAA-MM-DD"
-    marcaciones: [   // siempre tres pares; null si la celda está vacía
+    marcaciones: [   // siempre tres pares
       { ingreso, salida },
       { ingreso, salida },
       { ingreso, salida }
@@ -139,7 +139,7 @@ leerArchivoMensual(buffer) -> {
 }
 ```
 
-Cada hora se expresa en minutos enteros desde la medianoche (0 a 1439) o `null`. Una salida posterior a la medianoche (por ejemplo 00:03) viene en la misma fila y se conserva tal cual.
+Cada hora de marcación es: minutos enteros desde la medianoche (0 a 1439) si la celda es una hora de Excel válida; `null` si está vacía; o el texto original de la celda (recortado) si no es una hora de Excel. Eso no detiene la lectura del archivo: el motor bloquea solo esa fecha (7.3). Una salida posterior a la medianoche (por ejemplo 00:03) viene en la misma fila y se conserva tal cual.
 
 ---
 
@@ -295,7 +295,7 @@ Con una sola marcación, `Hs_Trab = 0:00` y se genera el mismo aviso.
 
 ### 7.3. Datos imposibles
 
-Horas no interpretables o fuera de `00:00-23:59`: `DATOS_HORARIOS_IMPOSIBLES` (bloqueante para esa fecha). Un par con salida igual al ingreso no bloquea: dura `0`.
+Horas no interpretables o fuera de `00:00-23:59` (incluido el texto original que devolvió la lectura del Excel cuando la celda no era una hora): `DATOS_HORARIOS_IMPOSIBLES` (bloqueante **solo para esa fecha**; el resto del mes y del flujo siguen). Un par con salida igual al ingreso no bloquea: dura `0`.
 
 ---
 
@@ -538,7 +538,7 @@ Selector de archivos `.xlsx` con selección múltiple (uno por agente). Cada arc
 
 Una fila por archivo con el nombre del archivo y el agente reconocido. Si el nombre no coincide con ningún agente, un desplegable con los agentes para elegir uno: al elegirlo, `nombre_reloj` de ese agente pasa a ser ese nombre (reemplaza el anterior), se escribe en la carpeta del paso 1 y el archivo se vuelve a identificar.
 
-Debajo, **Días a revisar**: lista de agente, fecha y texto de los días con bloqueante o con aviso `MARCACIONES_INCOMPLETAS`. Si no hay, no se muestra nada. Cada día de esa lista tiene un botón **Corregir** que abre, debajo del día, las seis marcaciones (Ingreso 1, Salida 1, Ingreso 2, Salida 2, Ingreso 3, Salida 3) como campos `HH:MM` con los valores actuales; un campo vacío es válido. Botones **Aplicar** y **Cancelar**.
+Debajo, **Días a revisar**: lista de agente, fecha y texto de los días con bloqueante o con aviso `MARCACIONES_INCOMPLETAS`. Si no hay, no se muestra nada. Cada día de esa lista tiene un botón **Corregir** que abre, debajo del día, las seis marcaciones (Ingreso 1, Salida 1, Ingreso 2, Salida 2, Ingreso 3, Salida 3) como campos de texto: si la marcación era una hora válida se muestra en `HH:MM`; si venía como texto no interpretable del Excel, el campo muestra ese texto original; un campo vacío es válido. Botones **Aplicar** y **Cancelar**.
 
 **Aplicar** valida `HH:MM` estricto (`00:00` a `23:59` o vacío); si es inválido, muestra un mensaje en español junto al campo y no cambia nada. Si es válido, reemplaza las marcaciones de esa fecha en el archivo mensual leído (solo en memoria) y recalcula el agente. El día sale de la lista si ya no tiene aviso ni bloqueante, o sigue con su aviso actualizado. Los totales y el libro usan las marcaciones corregidas.
 
@@ -656,6 +656,7 @@ tests/        (una carpeta de pruebas por módulo, con datos sintéticos)
 38. Justificación `COMPLETA` prevalece sobre el tipo de día (8.2); `LIC. ANUAL ORDINARIA` y `RECESO INVERNAL` no cambian.
 39. Configuración en pantalla (14.5): pestañas Agentes, Calendario y Catálogo; edición en memoria con Guardar/Descartar por pestaña.
 40. Rediseño visual del libro (solo presentación, 11.2–11.5): tabla A–P (finales en `L`, factor `P` oculto, encabezado en fila 9); liquidación en `L3:L7` e importe en `M5`; Resumen sin sigla IMTHE y apunta a `$L$7`; colores reducidos a señales de `L` y fila bloqueante; cuadrícula oculta.
+41. Hora ilegible en el Excel mensual: la lectura devuelve el texto original (no lanza); bloquea solo esa fecha (`DATOS_HORARIOS_IMPOSIBLES`); Corregir muestra el texto; el libro escribe el texto en la celda y la fila en rojo.
 
 ---
 

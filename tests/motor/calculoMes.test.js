@@ -179,6 +179,27 @@ describe("calcularMes", () => {
     ]);
   });
 
+  it("texto ilegible en una marcación bloquea solo esa fecha; el resto se calcula", () => {
+    const resultado = mes({
+      dias: [
+        { fecha: "2026-08-18", marcaciones: [{ ingreso: "08:00", salida: "17:10" }], observacion: "" },
+        { fecha: "2026-08-19", marcaciones: [{ ingreso: "xxx", salida: "17:00" }], observacion: "" },
+        { fecha: "2026-08-20", marcaciones: [{ ingreso: "08:00", salida: "16:00" }], observacion: "" },
+      ],
+    });
+    const bloqueado = resultado.dias.find((dia) => dia.fecha === "2026-08-19");
+    const ok18 = resultado.dias.find((dia) => dia.fecha === "2026-08-18");
+    const ok20 = resultado.dias.find((dia) => dia.fecha === "2026-08-20");
+    expect(bloqueado.bloqueante).toBe("DATOS_HORARIOS_IMPOSIBLES");
+    expect(bloqueado.Hs_Extra_Realizada).toBe(0);
+    expect(ok18.bloqueante).toBeNull();
+    expect(ok18.Hs_Extra_Realizada).toBe(160);
+    expect(ok20.bloqueante).toBeNull();
+    expect(ok20.Hs_Extra_Realizada).toBe(90);
+    expect(resultado.totales.realizadas).toBe(250);
+    expect(resultado.hayBloqueantes).toBe(true);
+  });
+
   it("no calcula días ni totales si el agente no se identifica", () => {
     const resultado = mes({ nombre: "NADIE, Nadie" });
     expect(resultado.agente).toBeNull();

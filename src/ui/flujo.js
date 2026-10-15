@@ -4,7 +4,7 @@
 
 import { ARCHIVOS } from "../datos/esquemas.js";
 import { textoAviso } from "../motor/avisos.js";
-import { parsearHora } from "../motor/tiempo.js";
+import { formatearHM, parsearHora } from "../motor/tiempo.js";
 
 /** Hora del día estricta HH:MM (00:00–23:59). */
 const RE_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -197,6 +197,62 @@ function minutosDeHhmmOVacio(texto) {
 }
 
 /**
+ * Texto de una marcación para mostrar en pantalla (lista, diagnóstico).
+ * Nunca lanza: null/undefined → ""; minutos enteros ≥ 0 → H:MM; string → tal cual.
+ *
+ * @param {unknown} valor
+ * @returns {string}
+ */
+export function textoMarcacion(valor) {
+  if (valor === null || valor === undefined || valor === "") {
+    return "";
+  }
+  if (typeof valor === "string") {
+    return valor;
+  }
+  if (Number.isSafeInteger(valor) && valor >= 0) {
+    return formatearHM(valor);
+  }
+  return String(valor).trim();
+}
+
+/**
+ * Texto para el campo de Corregir: HH:MM estricto desde minutos, el texto original, o vacío.
+ * Nunca lanza.
+ *
+ * @param {unknown} valor Minutos enteros, texto de celda o null.
+ * @returns {string}
+ */
+export function textoCampoMarcacion(valor) {
+  if (Number.isSafeInteger(valor) && valor >= 0 && valor <= 1439) {
+    const h = Math.floor(valor / 60);
+    const m = valor % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+  return textoMarcacion(valor);
+}
+
+/**
+ * Valor de marcación del archivo mensual listo para el motor (H:MM, texto original o null).
+ * Nunca lanza: un string se pasa sin convertir.
+ *
+ * @param {unknown} valor Minutos enteros, texto o null.
+ * @returns {string|null}
+ */
+export function marcaParaCalculo(valor) {
+  if (valor === null || valor === undefined || valor === "") {
+    return null;
+  }
+  if (typeof valor === "string") {
+    return valor;
+  }
+  if (Number.isSafeInteger(valor) && valor >= 0) {
+    return formatearHM(valor);
+  }
+  return String(valor).trim();
+}
+
+/**
  * Corrige las seis marcaciones de una fecha en el archivo mensual (en memoria).
  * Valida HH:MM estricto (00:00–23:59) o vacío. No muta el original.
  *
@@ -205,7 +261,7 @@ function minutosDeHhmmOVacio(texto) {
  *   periodo: { anio: number, mes: number },
  *   dias: Array<{
  *     fecha: string,
- *     marcaciones: Array<{ ingreso: number|null, salida: number|null }>,
+ *     marcaciones: Array<{ ingreso: number|string|null, salida: number|string|null }>,
  *     observacion: string,
  *   }>,
  * }} archivoMensual
