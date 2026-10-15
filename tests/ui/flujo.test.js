@@ -311,7 +311,7 @@ describe("corregirMarcaciones", () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const fila = 13 + resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
+    const fila = 10 + resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
     const excelEpoch = Date.UTC(1899, 11, 30);
     /**
      * @param {unknown} valor
@@ -329,7 +329,7 @@ describe("corregirMarcaciones", () => {
       }
       return null;
     }
-    expect(minutosDeCelda(hoja.getCell(fila, 5).value)).toBe(480);
-    expect(minutosDeCelda(hoja.getCell(fila, 6).value)).toBe(1030);
+    expect(minutosDeCelda(hoja.getCell(fila, 3).value)).toBe(480);
+    expect(minutosDeCelda(hoja.getCell(fila, 4).value)).toBe(1030);
   });
 });

@@ -12,6 +12,9 @@ const CATALOGO = {
   horas_maximas: "560:00",
 };
 
+const FILA_ENC = 9;
+const FILA_PRIMERA = 10;
+
 /**
  * @param {object} [parcial]
  * @returns {object}
@@ -108,6 +111,15 @@ async function leerLibro(buffer) {
 }
 
 /**
+ * @param {object} resultado
+ * @param {string} fecha
+ * @returns {number}
+ */
+function filaDe(resultado, fecha) {
+  return FILA_PRIMERA + resultado.dias.findIndex((d) => d.fecha === fecha);
+}
+
+/**
  * @param {unknown} valor
  * @returns {unknown}
  */
@@ -136,7 +148,7 @@ function minutosDeValor(valor) {
 }
 
 describe("generarLibro", () => {
-  it("B1: totales en C5:C9 para meses de 28, 30 y 31 días", async () => {
+  it("totales en L3:L7 e importe en M5 para meses de 28, 30 y 31 días", async () => {
     const casos = [
       { anio: 2026, mes: 2, diasMes: 28, fecha: "2026-02-18" },
       { anio: 2026, mes: 4, diasMes: 30, fecha: "2026-04-20" },
@@ -154,33 +166,34 @@ describe("generarLibro", () => {
       const wb = await leerLibro(buffer);
       const hoja = wb.getWorksheet("PEREZ, J");
       expect(hoja).toBeDefined();
-      expect(hoja.getCell("B4").value).toBe("Hs. extra autorizadas");
-      expect(hoja.getCell("B5").value).toBe("Hs. extra realizadas");
-      expect(hoja.getCell("B6").value).toBe("Hs. finales (días comunes)");
-      expect(hoja.getCell("B7").value).toBe("Hs. finales (feriados, cuentan x2)");
-      expect(hoja.getCell("B8").value).toBe("Total hs. a liquidar");
-      expect(hoja.getCell("B9").value).toBe("Importe");
-      expect(hoja.getCell("A4").value).toBeNull();
-      expect(hoja.getCell("A5").value).toBeNull();
-      expect(hoja.getCell("A10").value).toBeNull();
-      expect(minutosDeValor(hoja.getCell("C5").value)).toBe(item.resultado.totales.realizadas);
-      expect(minutosDeValor(hoja.getCell("C6").value)).toBe(item.resultado.totales.finalesSimples);
-      expect(minutosDeValor(hoja.getCell("C7").value)).toBe(item.resultado.totales.finalesDobles);
-      expect(minutosDeValor(hoja.getCell("C8").value)).toBe(item.resultado.totales.finalesEquivalentes);
-      expect(resultadoFormula(hoja.getCell("C9").value)).toBe(item.resultado.totales.importe);
-      expect(hoja.getCell("C4").value).toMatchObject({
-        formula: `SUM(L13:L${12 + caso.diasMes})`,
+      expect(hoja.getCell("A1").value).toMatch(/^INFORME DE HORAS EXTRAS -/);
+      expect(hoja.getCell("H3").value).toBe("Hs. extra autorizadas");
+      expect(hoja.getCell("H4").value).toBe("Hs. extra realizadas");
+      expect(hoja.getCell("H5").value).toBe("Hs. finales (días comunes)");
+      expect(hoja.getCell("H6").value).toBe("Hs. finales (feriados, cuentan x2)");
+      expect(hoja.getCell("H7").value).toBe("Total hs. a liquidar");
+      expect(hoja.getCell("M4").value).toBe("IMPORTE A LIQUIDAR");
+      expect(minutosDeValor(hoja.getCell("L4").value)).toBe(item.resultado.totales.realizadas);
+      expect(minutosDeValor(hoja.getCell("L5").value)).toBe(item.resultado.totales.finalesSimples);
+      expect(minutosDeValor(hoja.getCell("L6").value)).toBe(item.resultado.totales.finalesDobles);
+      expect(minutosDeValor(hoja.getCell("L7").value)).toBe(item.resultado.totales.finalesEquivalentes);
+      expect(resultadoFormula(hoja.getCell("M5").value)).toBe(item.resultado.totales.importe);
+      expect(hoja.getCell("L3").value).toMatchObject({
+        formula: `SUM(J${FILA_PRIMERA}:J${FILA_ENC + caso.diasMes})`,
       });
-      expect(hoja.getCell("C5").value).toMatchObject({
-        formula: expect.stringMatching(/^SUM\(M13:M\d+\)$/),
+      expect(hoja.getCell("L4").value).toMatchObject({
+        formula: expect.stringMatching(/^SUM\(K10:K\d+\)$/),
       });
-      expect(hoja.getCell("C8").value).toMatchObject({ formula: "C6+2*C7" });
-      expect(hoja.getCell("C4").alignment?.horizontal).toBe("center");
-      expect(hoja.getCell("B4").alignment?.horizontal).toBe("left");
+      expect(hoja.getCell("L7").value).toMatchObject({ formula: "L5+2*L6" });
+      expect(hoja.getCell("M5").value).toMatchObject({
+        formula: "ROUNDUP(ROUND(L7*1440,0)*B7/60,0)",
+      });
+      expect(hoja.getCell("L3").alignment?.horizontal).toBe("right");
+      expect(hoja.getCell("M5").numFmt).toBe('"$"#,##0');
     }
   });
 
-  it("B3 y B4: validación en N y bloqueo según editable", async () => {
+  it("validación en L, protección, sumas semanales e impresión", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
@@ -192,28 +205,45 @@ describe("generarLibro", () => {
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const filaEditable = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
-    const filaVacia = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-19");
+    const filaEditable = filaDe(item.resultado, "2026-08-18");
+    const filaVacia = filaDe(item.resultado, "2026-08-19");
 
-    expect(hoja.getCell(filaEditable, 14).protection?.locked).toBe(false);
-    expect(hoja.getCell(filaVacia, 14).protection?.locked).not.toBe(false);
+    expect(hoja.getCell(filaEditable, 12).protection?.locked).toBe(false);
+    expect(hoja.getCell(filaVacia, 12).protection?.locked).not.toBe(false);
     expect(hoja.getCell("A1").protection?.locked).not.toBe(false);
 
-    const validacion = hoja.getCell(filaEditable, 14).dataValidation;
+    const validacion = hoja.getCell(filaEditable, 12).dataValidation;
     expect(validacion?.type).toBe("decimal");
     expect(validacion?.operator).toBe("between");
     expect(validacion?.error).toMatch(/horas finales/i);
-    expect(hoja.getCell(filaVacia, 14).dataValidation).toBeUndefined();
+    expect(hoja.getCell(filaVacia, 12).dataValidation).toBeUndefined();
 
     const zip = await JSZip.loadAsync(buffer);
     const xmlHoja = await zip.file("xl/worksheets/sheet2.xml").async("string");
-    expect(xmlHoja).toContain(`sqref="N${filaEditable}"`);
-    expect(xmlHoja).toContain(`<formula2>M${filaEditable}</formula2>`);
+    expect(xmlHoja).toContain(`sqref="L${filaEditable}"`);
+    expect(xmlHoja).toContain(`<formula2>K${filaEditable}</formula2>`);
+
+    expect(hoja.pageSetup.printArea).toMatch(/^A1:O\d+$/);
+    expect(hoja.pageSetup.printTitlesRow).toBe("9:9");
+    expect(hoja.pageSetup.orientation).toBe("landscape");
+    expect(hoja.headerFooter.oddHeader).toContain("PEREZ, Juan Alberto");
+    expect(hoja.headerFooter.oddHeader).toContain("10001");
+    expect(hoja.headerFooter.oddFooter).toContain("&P");
   });
 
-  it("B5 y B6: Resumen apunta a C8 y control de horas máximas", async () => {
-    const aPerez = agente({ legajo: 100, nombre: "PEREZ, Juan Alberto", nombre_reloj: "PEREZ, JUAN" });
-    const aGomez = agente({ legajo: 200, nombre: "GOMEZ, Ana", nombre_reloj: "GOMEZ, ANA" });
+  it("Resumen apunta a L7 y control con montos en D", async () => {
+    const aPerez = agente({
+      legajo: 100,
+      dni: "23456789",
+      nombre: "PEREZ, Juan Alberto",
+      nombre_reloj: "PEREZ, JUAN",
+    });
+    const aGomez = agente({
+      legajo: 200,
+      dni: "34567890",
+      nombre: "GOMEZ, Ana",
+      nombre_reloj: "GOMEZ, ANA",
+    });
     const mPerez = mesDe({
       anio: 2026,
       mes: 8,
@@ -236,63 +266,81 @@ describe("generarLibro", () => {
 
     expect(wb.worksheets.map((h) => h.name)).toEqual(["Resumen", "PEREZ, J", "GOMEZ, A"]);
     const resumen = wb.getWorksheet("Resumen");
-    expect(resumen.getCell("C1").value).toBe("AGOSTO/2026");
+    expect(resumen.getCell("A1").value).toBe(
+      "INFORME MENSUAL DE TOTAL DE HORAS EXTRAS - AGOSTO/2026",
+    );
+    expect(resumen.getCell("C1").value).toBeNull();
     expect(resumen.getCell("A3").value).toBe(100);
+    expect(resumen.getCell("A3").numFmt).toBe("0");
+    expect(resumen.getCell("C3").value).toBe("23.456.789");
 
     const e3 = resumen.getCell("E3").value;
-    expect(String(/** @type {{ formula: string }} */ (e3).formula)).toContain("$C$8");
+    expect(String(/** @type {{ formula: string }} */ (e3).formula)).toContain("$L$7");
     expect(minutosDeValor(e3)).toBe(mPerez.resultado.totales.finalesEquivalentes);
     expect(resultadoFormula(resumen.getCell("F3").value)).toBe(mPerez.resultado.totales.importe);
 
     let filaDif = null;
+    let filaB = null;
     resumen.eachRow((row, n) => {
       if (row.getCell(2).value === "Diferencia (A - B)") {
         filaDif = n;
       }
+      if (row.getCell(2).value === "Total de horas (B)") {
+        filaB = n;
+      }
     });
     expect(filaDif).not.toBeNull();
+    expect(filaB).not.toBeNull();
     expect(String(resultadoFormula(resumen.getCell(filaDif, 3).value))).toMatch(/SE SUPERA EL MÁXIMO/);
-    expect(resumen.getCell(filaDif, 2).value).toBe("Diferencia (A - B)");
-    expect(resumen.getCell(filaDif, 1).value).toBeNull();
-    expect(resumen.getCell(filaDif - 2, 2).value).toBe("Cant. Máxima de Hs. a abonar (A)");
-    expect(resumen.getCell(filaDif - 2, 1).value).toBeNull();
+    expect(resumen.getCell(filaDif, 4).value).toMatchObject({
+      formula: `D${filaDif - 2}-D${filaB}`,
+    });
+    expect(resumen.getCell(filaB, 4).value).toMatchObject({
+      formula: "F5",
+    });
+    expect(resumen.getCell(filaDif - 2, 2).value).toBe("Cant. máxima de hs. a abonar (A)");
     expect(resumen.getCell("B5").value).toBe("Totales");
-    expect(resumen.getCell("A5").value).toBeNull();
     expect(resumen.getCell(2, 1).font?.bold).toBe(true);
-    expect(resumen.getCell(2, 1).fill?.fgColor?.argb).toBe("FFF2F2F2");
-    expect(resumen.getCell("D3").numFmt).toBe("#,##0");
-    expect(resumen.getCell("F3").numFmt).toBe("#,##0");
+    expect(resumen.getCell(2, 1).fill?.fgColor?.argb).toBe("FFEEF2F6");
+    expect(resumen.getCell("D3").numFmt).toBe('"$"#,##0');
+    expect(resumen.getCell("F3").numFmt).toBe('"$"#,##0');
     expect(resumen.getCell("B3").alignment?.horizontal).toBe("left");
     expect(resumen.getCell("A3").alignment?.horizontal).toBe("center");
   });
 
-  it("no tiene columnas S ni T; R está oculta; anchos definidos", async () => {
+  it("cuadrícula oculta; Observaciones última visible; P oculta; legajo y DNI", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
+      agente: agente({ dni: "23456789" }),
       dias: [dia("2026-08-18", "08:00", "17:10")],
     });
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-
-    expect(hoja.getCell(12, 19).value).toBeNull();
-    expect(hoja.getCell(12, 20).value).toBeNull();
-    expect(hoja.getCell(30, 19).value).toBeNull();
-    expect(hoja.getCell(30, 20).value).toBeNull();
-    expect(hoja.getColumn(18).hidden).toBe(true);
-    expect(hoja.getCell(30, 18).value).toBe(1);
-
-    expect(hoja.getColumn(2).width).toBeGreaterThan(20);
-    expect(hoja.getColumn(3).width).toBeGreaterThanOrEqual(12);
-    expect(hoja.getColumn(15).width).toBeGreaterThan(20);
-    expect(hoja.pageSetup.printArea).toMatch(/^A1:Q\d+$/);
-
     const resumen = wb.getWorksheet("Resumen");
-    expect(resumen.getColumn(2).width).toBeGreaterThan(20);
+
+    for (const h of wb.worksheets) {
+      expect(h.views?.[0]?.showGridLines).toBe(false);
+    }
+
+    expect(hoja.getCell(FILA_ENC, 15).value).toBe("Observaciones");
+    expect(hoja.getCell(FILA_ENC, 16).value).toBeNull();
+    expect(hoja.getColumn(16).hidden).toBe(true);
+    expect(hoja.getCell(filaDe(item.resultado, "2026-08-18"), 16).value).toBe(1);
+
+    expect(hoja.getCell("B5").value).toBe(10001);
+    expect(hoja.getCell("B5").numFmt).toBe("0");
+    expect(hoja.getCell("B6").value).toBe("23.456.789");
+    expect(typeof hoja.getCell("B6").value).toBe("string");
+
+    expect(hoja.getColumn(1).width).toBe(12);
+    expect(hoja.getColumn(15).width).toBe(30);
+    expect(hoja.pageSetup.printArea).toMatch(/^A1:O\d+$/);
+    expect(resumen.getColumn(2).width).toBe(36);
   });
 
-  it("una regla de formato condicional por fila editable con fórmula y bgColor", async () => {
+  it("una regla de formato condicional verde por fila editable con prioridad", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
@@ -309,17 +357,18 @@ describe("generarLibro", () => {
     expect(reglas).toHaveLength(editables.length);
 
     for (const diaCalc of editables) {
-      const fila = 13 + item.resultado.dias.findIndex((d) => d.fecha === diaCalc.fecha);
-      const cf = reglas.find((r) => r.ref === `N${fila}`);
+      const fila = filaDe(item.resultado, diaCalc.fecha);
+      const cf = reglas.find((r) => r.ref === `L${fila}`);
       expect(cf).toBeDefined();
       const rule = cf.rules[0];
       expect(rule.type).toBe("expression");
-      expect(rule.formulae[0]).toBe(`ROUND($N${fila}*1440,0)<>${diaCalc.Hs_Computada_Sistema}`);
+      expect(rule.priority).toBe(1);
+      expect(rule.formulae[0]).toBe(`ROUND($L${fila}*1440,0)<>${diaCalc.Hs_Computada_Sistema}`);
       expect(rule.style.fill.bgColor.argb).toBe("FFA9D08E");
     }
   });
 
-  it("colores de aviso y alternancia; N siempre azul", async () => {
+  it("sin relleno en filas comunes; rojo solo bloqueante; ámbar solo en L con excedente", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
@@ -328,45 +377,62 @@ describe("generarLibro", () => {
         dia("2026-08-17", "08:00", "16:00"),
         dia("2026-08-18", "08:00", "17:10"),
         dia("2026-08-23", "08:00", "11:00"),
+        { fecha: "2026-08-24", marcaciones: [{ ingreso: "08:00", salida: null }], observacion: "" },
       ],
     });
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const idx = (fecha) => 13 + item.resultado.dias.findIndex((d) => d.fecha === fecha);
+    const idx = (fecha) => filaDe(item.resultado, fecha);
 
-    expect(hoja.getCell(idx("2026-08-17"), 1).fill?.fgColor?.argb).toBe("FFFFF2CC");
-    expect(hoja.getCell(idx("2026-08-23"), 1).fill?.fgColor?.argb).toBe("FFF8CBAD");
+    // Feriado con excedente: ámbar en L, sin amarillo de fila.
+    expect(hoja.getCell(idx("2026-08-17"), 1).fill?.fgColor?.argb).toBeUndefined();
+    expect(hoja.getCell(idx("2026-08-17"), 12).fill?.fgColor?.argb).toBe("FFFFEFB8");
 
+    // Hábil normal editable: L blanco, sin azul fijo.
+    expect(hoja.getCell(idx("2026-08-18"), 12).fill?.fgColor?.argb).toBe("FFFFFFFF");
+    expect(hoja.getCell(idx("2026-08-18"), 1).fill?.fgColor?.argb).toBeUndefined();
+
+    // Domingo con trabajo: ámbar en L, sin naranja de fila.
+    expect(hoja.getCell(idx("2026-08-23"), 1).fill?.fgColor?.argb).toBeUndefined();
+    expect(hoja.getCell(idx("2026-08-23"), 12).fill?.fgColor?.argb).toBe("FFFFEFB8");
+
+    // Marcaciones incompletas: no pintan.
+    const filaInc = idx("2026-08-24");
+    const diaInc = item.resultado.dias.find((d) => d.fecha === "2026-08-24");
+    expect(diaInc.avisos.some((a) => a.codigo === "MARCACIONES_INCOMPLETAS")).toBe(true);
+    expect(hoja.getCell(filaInc, 1).fill?.fgColor?.argb).toBeUndefined();
+    expect(hoja.getCell(filaInc, 12).fill?.fgColor?.argb).toBeUndefined();
+
+    // Día vacío sin bloqueante: sin relleno zebra.
     const fila21 = idx("2026-08-21");
-    expect(hoja.getCell(fila21, 1).fill?.fgColor?.argb).toBe(
-      fila21 % 2 === 0 ? "FFF2F2F2" : undefined,
-    );
-    // Sin el gris #EDEDED de día sin trabajo.
-    expect(hoja.getCell(fila21, 1).fill?.fgColor?.argb).not.toBe("FFEDEDED");
-
-    expect(hoja.getCell(idx("2026-08-18"), 14).fill?.fgColor?.argb).toBe("FFDDEBF7");
-    expect(hoja.getCell(idx("2026-08-17"), 14).fill?.fgColor?.argb).toBe("FFDDEBF7");
-
-    const c8 = hoja.getCell("C8").value;
-    expect(c8).toMatchObject({ formula: "C6+2*C7" });
-    expect(minutosDeValor(c8)).toBe(item.resultado.totales.finalesEquivalentes);
+    expect(hoja.getCell(fila21, 1).fill?.fgColor?.argb).toBeUndefined();
   });
 
-  it("K usa jornadaExigible del permiso", async () => {
+  it("rojo en fila bloqueante; L sin borde de campo", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
-      dias: [dia("2026-08-18", "08:00", "17:10", "PERMISO MEDIA JORNADA")],
+      dias: [
+        {
+          fecha: "2026-08-18",
+          marcaciones: [{ ingreso: "25:00", salida: "17:00" }],
+          observacion: "",
+        },
+      ],
     });
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const fila = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
-    expect(minutosDeValor(hoja.getCell(fila, 11).value)).toBe(210);
+    const fila = filaDe(item.resultado, "2026-08-18");
+    expect(item.resultado.dias.find((d) => d.fecha === "2026-08-18").bloqueante).not.toBeNull();
+    expect(hoja.getCell(fila, 1).fill?.fgColor?.argb).toBe("FFF8D7D7");
+    expect(hoja.getCell(fila, 15).fill?.fgColor?.argb).toBe("FFF8D7D7");
+    expect(hoja.getCell(fila, 12).protection?.locked).not.toBe(false);
+    expect(hoja.getCell(fila, 12).border?.left?.color?.argb).not.toBe("FF9FB0C3");
   });
 
-  it("K en 0:00 para COMPLETA, domingo, sábado no habilitado, feriado y asueto; sin cambio en hábil, permiso, sábado habilitado y LAO", async () => {
+  it("I usa jornadaExigible del permiso; I en 0:00 según reglas de presentación", async () => {
     const ag = agente({
       configuraciones: [configuracion({
         sabado_inicio: "08:00",
@@ -412,25 +478,23 @@ describe("generarLibro", () => {
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
     const hojaOff = wb.getWorksheet("LOPEZ, M");
-    const idx = (fecha) => 13 + item.resultado.dias.findIndex((d) => d.fecha === fecha);
-    const k = (fecha) => minutosDeValor(hoja.getCell(idx(fecha), 11).value);
-    const l = (fecha) => minutosDeValor(hoja.getCell(idx(fecha), 12).value);
+    const iCol = (fecha) => minutosDeValor(hoja.getCell(filaDe(item.resultado, fecha), 9).value);
+    const jCol = (fecha) => minutosDeValor(hoja.getCell(filaDe(item.resultado, fecha), 10).value);
 
-    expect(k("2026-08-17")).toBe(0); // feriado
-    expect(k("2026-08-18")).toBe(390); // hábil normal
-    expect(k("2026-08-19")).toBe(0); // asueto
-    expect(k("2026-08-20")).toBe(0); // asueto (descripción Paro)
-    expect(k("2026-08-21")).toBe(0); // COMPLETA
-    expect(l("2026-08-21")).toBe(0); // COMPLETA → L 0:00
-    expect(k("2026-08-22")).toBe(390); // sábado habilitado → duracion_jornada
-    expect(k("2026-08-23")).toBe(0); // domingo
-    expect(k("2026-08-24")).toBe(390); // LAO
-    expect(k("2026-08-25")).toBe(210); // permiso
-    const filaSabOff = 13 + itemOff.resultado.dias.findIndex((d) => d.fecha === "2026-08-22");
-    expect(minutosDeValor(hojaOff.getCell(filaSabOff, 11).value)).toBe(0);
+    expect(iCol("2026-08-17")).toBe(0);
+    expect(iCol("2026-08-18")).toBe(390);
+    expect(iCol("2026-08-19")).toBe(0);
+    expect(iCol("2026-08-20")).toBe(0);
+    expect(iCol("2026-08-21")).toBe(0);
+    expect(jCol("2026-08-21")).toBe(0);
+    expect(iCol("2026-08-22")).toBe(390);
+    expect(iCol("2026-08-23")).toBe(0);
+    expect(iCol("2026-08-24")).toBe(390);
+    expect(iCol("2026-08-25")).toBe(210);
+    expect(minutosDeValor(hojaOff.getCell(filaDe(itemOff.resultado, "2026-08-22"), 9).value)).toBe(0);
   });
 
-  it("L en feriado/asueto: tope solo con marcación; sin marcación 0:00; LAO sin cambio; C4 y P usan L mostrada", async () => {
+  it("J en feriado/asueto: tope solo con marcación; L3 y M usan J mostrada", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
@@ -449,39 +513,37 @@ describe("generarLibro", () => {
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const idx = (fecha) => 13 + item.resultado.dias.findIndex((d) => d.fecha === fecha);
+    const idx = (fecha) => filaDe(item.resultado, fecha);
     const diaCalc = (fecha) => item.resultado.dias.find((d) => d.fecha === fecha);
 
-    expect(minutosDeValor(hoja.getCell(idx("2026-08-17"), 12).value)).toBe(diaCalc("2026-08-17").Tope_Aplicable);
-    expect(minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)).toBe(0);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-17"), 10).value)).toBe(diaCalc("2026-08-17").Tope_Aplicable);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-19"), 10).value)).toBe(0);
     expect(diaCalc("2026-08-19").Tope_Aplicable).toBeGreaterThan(0);
-    expect(minutosDeValor(hoja.getCell(idx("2026-08-20"), 12).value)).toBe(diaCalc("2026-08-20").Tope_Aplicable);
-    expect(minutosDeValor(hoja.getCell(idx("2026-08-24"), 12).value)).toBe(diaCalc("2026-08-24").Tope_Aplicable);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-20"), 10).value)).toBe(diaCalc("2026-08-20").Tope_Aplicable);
+    expect(minutosDeValor(hoja.getCell(idx("2026-08-24"), 10).value)).toBe(diaCalc("2026-08-24").Tope_Aplicable);
 
-    let sumaL = 0;
+    let sumaJ = 0;
     for (let i = 0; i < item.resultado.dias.length; i += 1) {
-      const v = hoja.getCell(13 + i, 12).value;
+      const v = hoja.getCell(FILA_PRIMERA + i, 10).value;
       if (v !== null && v !== undefined) {
-        sumaL += minutosDeValor(v);
+        sumaJ += minutosDeValor(v);
       }
     }
-    expect(minutosDeValor(hoja.getCell("C4").value)).toBe(sumaL);
-    expect(hoja.getCell("C4").value).toMatchObject({ formula: "SUM(L13:L43)" });
+    expect(minutosDeValor(hoja.getCell("L3").value)).toBe(sumaJ);
+    expect(hoja.getCell("L3").value).toMatchObject({ formula: "SUM(J10:J40)" });
 
-    // Sábado 22/8: semana del 17 al 22; feriado 17 con tope, asueto 19 sin marcación → 0 en L.
-    const pSab = hoja.getCell(idx("2026-08-22"), 16).value;
-    expect(pSab).toMatchObject({ formula: `SUM(L${idx("2026-08-17")}:L${idx("2026-08-22")})` });
-    const esperadaP = minutosDeValor(hoja.getCell(idx("2026-08-17"), 12).value)
-      + minutosDeValor(hoja.getCell(idx("2026-08-18"), 12).value)
-      + minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)
-      + minutosDeValor(hoja.getCell(idx("2026-08-20"), 12).value)
-      + minutosDeValor(hoja.getCell(idx("2026-08-21"), 12).value)
-      + minutosDeValor(hoja.getCell(idx("2026-08-22"), 12).value);
-    expect(minutosDeValor(pSab)).toBe(esperadaP);
-    expect(minutosDeValor(hoja.getCell(idx("2026-08-19"), 12).value)).toBe(0);
+    const mSab = hoja.getCell(idx("2026-08-22"), 13).value;
+    expect(mSab).toMatchObject({ formula: `SUM(J${idx("2026-08-17")}:J${idx("2026-08-22")})` });
+    const esperadaM = minutosDeValor(hoja.getCell(idx("2026-08-17"), 10).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-18"), 10).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-19"), 10).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-20"), 10).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-21"), 10).value)
+      + minutosDeValor(hoja.getCell(idx("2026-08-22"), 10).value);
+    expect(minutosDeValor(mSab)).toBe(esperadaM);
   });
 
-  it("centrado de columnas de tabla salvo B y O; C4:C9 centrados", async () => {
+  it("alineación centrada salvo O; L3:L7 a la derecha; B del Resumen a la izquierda", async () => {
     const item = mesDe({
       anio: 2026,
       mes: 8,
@@ -490,21 +552,24 @@ describe("generarLibro", () => {
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const fila = 13 + item.resultado.dias.findIndex((d) => d.fecha === "2026-08-18");
+    const resumen = wb.getWorksheet("Resumen");
+    const fila = filaDe(item.resultado, "2026-08-18");
 
-    expect(hoja.getCell(12, 1).alignment?.horizontal).toBe("center");
-    expect(hoja.getCell(12, 2).alignment?.horizontal).toBe("left");
-    expect(hoja.getCell(12, 15).alignment?.horizontal).toBe("left");
+    expect(hoja.getCell(FILA_ENC, 1).alignment?.horizontal).toBe("center");
+    expect(hoja.getCell(FILA_ENC, 2).alignment?.horizontal).toBe("center");
+    expect(hoja.getCell(FILA_ENC, 15).alignment?.horizontal).toBe("left");
     expect(hoja.getCell(fila, 1).alignment?.horizontal).toBe("center");
-    expect(hoja.getCell(fila, 2).alignment?.horizontal).toBe("left");
+    expect(hoja.getCell(fila, 2).alignment?.horizontal).toBe("center");
     expect(hoja.getCell(fila, 11).alignment?.horizontal).toBe("center");
     expect(hoja.getCell(fila, 15).alignment?.horizontal).toBe("left");
-    for (let filaTot = 4; filaTot <= 9; filaTot += 1) {
-      expect(hoja.getCell(filaTot, 3).alignment?.horizontal).toBe("center");
+    for (let filaTot = 3; filaTot <= 7; filaTot += 1) {
+      expect(hoja.getCell(filaTot, 12).alignment?.horizontal).toBe("right");
     }
+    expect(resumen.getCell("B3").alignment?.horizontal).toBe("left");
+    expect(resumen.getCell("A3").alignment?.horizontal).toBe("center");
   });
 
-  it("sumas semanales P y Q en sábado con result", async () => {
+  it("sumas semanales M y N en sábado con result", async () => {
     const ag = agente({
       configuraciones: [configuracion({
         sabado_inicio: "08:00",
@@ -521,12 +586,85 @@ describe("generarLibro", () => {
     const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
     const wb = await leerLibro(buffer);
     const hoja = wb.getWorksheet("PEREZ, J");
-    const p = hoja.getCell(13, 16).value;
-    const q = hoja.getCell(13, 17).value;
-    expect(p).toMatchObject({ formula: "SUM(L13:L13)" });
-    expect(q).toMatchObject({ formula: "SUM(N13:N13)" });
-    expect(minutosDeValor(p)).toBe(item.resultado.dias[0].Tope_Aplicable);
-    expect(minutosDeValor(q)).toBe(item.resultado.dias[0].Hs_Computada_Sistema);
+    const m = hoja.getCell(FILA_PRIMERA, 13).value;
+    const n = hoja.getCell(FILA_PRIMERA, 14).value;
+    expect(m).toMatchObject({ formula: "SUM(J10:J10)" });
+    expect(n).toMatchObject({ formula: "SUM(L10:L10)" });
+    expect(minutosDeValor(m)).toBe(item.resultado.dias[0].Tope_Aplicable);
+    expect(minutosDeValor(n)).toBe(item.resultado.dias[0].Hs_Computada_Sistema);
+  });
+
+  it("filas de sábado con borde medium; texto gris solo sin marcaciones y realizadas 0", async () => {
+    const ag = agente({
+      configuraciones: [configuracion({
+        sabado_inicio: "08:00",
+        sabado_fin: "12:00",
+        sabado_tope: "04:00",
+      })],
+    });
+    const item = mesDe({
+      anio: 2026,
+      mes: 8,
+      agente: ag,
+      dias: [
+        dia("2026-08-01", "08:00", "12:00"),
+        dia("2026-08-18", "08:00", "14:30"),
+      ],
+    });
+    const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const sab = filaDe(item.resultado, "2026-08-01");
+    const habilSinExtra = filaDe(item.resultado, "2026-08-18");
+    const domingoVacio = filaDe(item.resultado, "2026-08-02");
+
+    expect(hoja.getCell(sab, 1).border?.bottom?.style).toBe("medium");
+    expect(hoja.getCell(sab, 1).border?.bottom?.color?.argb).toBe("FFAEB9C6");
+    expect(hoja.getCell(habilSinExtra, 1).border?.bottom?.style).toBe("thin");
+
+    // Domingo vacío: apagado.
+    expect(hoja.getCell(domingoVacio, 1).font?.color?.argb).toBe("FFA3AAB4");
+    // Hábil con marcaciones y realizadas 0:00: no apagado.
+    expect(minutosDeValor(hoja.getCell(habilSinExtra, 11).value)).toBe(0);
+    expect(hoja.getCell(habilSinExtra, 1).font?.color?.argb).toBe("FF262626");
+  });
+
+  it("títulos con centerContinuous sin combinar; alturas del Resumen", async () => {
+    const item = mesDe({
+      anio: 2026,
+      mes: 8,
+      dias: [dia("2026-08-18", "08:00", "17:10")],
+    });
+    const buffer = await generarLibro({ meses: [item], catalogo: CATALOGO });
+    const wb = await leerLibro(buffer);
+    const hoja = wb.getWorksheet("PEREZ, J");
+    const resumen = wb.getWorksheet("Resumen");
+
+    for (let col = 1; col <= 15; col += 1) {
+      expect(hoja.getCell(1, col).alignment?.horizontal).toBe("centerContinuous");
+      expect(hoja.getCell(1, col).alignment?.vertical).toBe("middle");
+    }
+    expect(hoja.getCell("A1").value).toMatch(/^INFORME DE HORAS EXTRAS -/);
+    for (let col = 2; col <= 15; col += 1) {
+      expect(hoja.getCell(1, col).value).toBeNull();
+    }
+    expect(hoja.hasMerges).toBe(false);
+
+    for (let col = 1; col <= 6; col += 1) {
+      expect(resumen.getCell(1, col).alignment?.horizontal).toBe("centerContinuous");
+      expect(resumen.getCell(1, col).alignment?.vertical).toBe("middle");
+    }
+    expect(resumen.getCell("A1").value).toMatch(/^INFORME MENSUAL DE TOTAL/);
+    for (let col = 2; col <= 6; col += 1) {
+      expect(resumen.getCell(1, col).value).toBeNull();
+    }
+    expect(resumen.hasMerges).toBe(false);
+
+    expect(resumen.getRow(1).height).toBe(28);
+    expect(resumen.getRow(2).height).toBe(30);
+    expect(resumen.getCell(2, 1).alignment?.vertical).toBe("middle");
+    expect(resumen.getCell(2, 1).alignment?.wrapText).toBe(true);
+    expect(hoja.getRow(FILA_ENC).height).toBe(32);
   });
 
   it("nombres de hoja repetidos agregan sufijo 2, 3", async () => {

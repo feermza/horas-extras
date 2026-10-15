@@ -10,19 +10,39 @@ import { parsearDuracion, parsearHora } from "../motor/tiempo.js";
 
 const FMT_HORA = "[h]:mm";
 const FMT_FECHA = "dd/mm/yyyy";
-const FMT_MONTO = "#,##0";
-const FILA_ENCABEZADO = 12;
-const FILA_PRIMERA = 13;
-const COL_FACTOR = 18; // R
+const FMT_ENTERO = "0";
+const FMT_MONTO = '"$"#,##0';
+const FMT_MONTO_DEC = '"$"#,##0.00';
+const FMT_MONTO_DIFF = '"$"#,##0;-"$"#,##0';
+
+const FILA_ENCABEZADO = 9;
+const FILA_PRIMERA = 10;
+const COL_FACTOR = 16; // P
+const COL_ULTIMA_VISIBLE = 15; // O
+
 const CLASE_COMPLETA = "COMPLETA";
 const CLASE_ESPECIAL = "ESPECIAL_LAO_RECESO";
-const COLOR_ENCABEZADO = "FFF2F2F2";
-const BORDE_FINO = Object.freeze({
-  top: { style: "thin", color: { argb: "FFB0B0B0" } },
-  left: { style: "thin", color: { argb: "FFB0B0B0" } },
-  bottom: { style: "thin", color: { argb: "FFB0B0B0" } },
-  right: { style: "thin", color: { argb: "FFB0B0B0" } },
-});
+
+const AZUL_PIZARRA = "FF1F3A5F";
+const TEXTO = "FF262626";
+const TEXTO_SEC = "FF6B7480";
+const TEXTO_APAGADO = "FFA3AAB4";
+const LINEA_FILA = "FFE3E7EC";
+const CIERRE_SEMANA = "FFAEB9C6";
+const LINEA_TARJETA = "FFD5DBE3";
+const LINEA_IMPORTE = "FFC9D1DB";
+const RELLENO_ENCABEZADO = "FFEEF2F6";
+const FONDO_TARJETA = "FFFAFBFC";
+const BORDE_EDITABLE = "FF9FB0C3";
+const AMBAR = "FFFFEFB8";
+const AMBAR_BORDE = "FFE2C766";
+const VERDE = "FFA9D08E";
+const ROJO = "FFF8D7D7";
+const RELLENO_TOTALES = "FFF6F8FA";
+const VERDE_TEXTO = "FF2E7D32";
+const ROJO_TEXTO = "FFB91C1C";
+
+const FUENTE = "Calibri";
 
 const DIAS_ES = Object.freeze([
   "Domingo",
@@ -49,10 +69,8 @@ const MESES_ES = Object.freeze([
   "DICIEMBRE",
 ]);
 
-/** Encabezados visibles A–Q; R (Factor) va oculta sin texto de encabezado. */
+/** Encabezados visibles A–O; P (Factor) oculta. */
 const ENCABEZADOS = Object.freeze([
-  "Legajo",
-  "Nombre",
   "Fecha",
   "Día",
   "Ingreso 1",
@@ -65,42 +83,31 @@ const ENCABEZADOS = Object.freeze([
   "Hs. autorizadas",
   "Hs. extra realizadas",
   "Hs. finales",
+  "Semana\nautorizadas",
+  "Semana\nfinales",
   "Observaciones",
-  "Semana: autorizadas",
-  "Semana: finales",
 ]);
 
-/** Anchos fijos de columnas A–R (B ancho para rótulos largos y nombre). */
 const ANCHOS_AGENTE = Object.freeze([
-  10, 38, 12, 11, 10, 10, 10, 10, 10, 10, 11, 12, 12, 11, 36, 12, 12, 8,
+  12, 11, 9.5, 9.5, 9.5, 9.5, 9.5, 9.5, 11, 12, 12, 11, 12, 12, 30, 8,
 ]);
 
-const ANCHOS_RESUMEN = Object.freeze([12, 38, 14, 12, 12, 14]);
+const ANCHOS_RESUMEN = Object.freeze([11, 36, 14, 14, 12, 16]);
 
-const ROTULOS_TOTALES = Object.freeze([
-  [4, "Hs. extra autorizadas"],
-  [5, "Hs. extra realizadas"],
-  [6, "Hs. finales (días comunes)"],
-  [7, "Hs. finales (feriados, cuentan x2)"],
-  [8, "Total hs. a liquidar"],
-  [9, "Importe"],
+const ROTULOS_LIQUIDACION = Object.freeze([
+  [3, "Hs. extra autorizadas"],
+  [4, "Hs. extra realizadas"],
+  [5, "Hs. finales (días comunes)"],
+  [6, "Hs. finales (feriados, cuentan x2)"],
+  [7, "Total hs. a liquidar"],
 ]);
 
-const COLOR_ROJO = "FFF4B6B6";
-const COLOR_NARANJA = "FFF8CBAD";
-const COLOR_AMARILLO = "FFFFF2CC";
-const COLOR_ALT = "FFF2F2F2";
-const COLOR_AZUL_N = "FFDDEBF7";
-const COLOR_VERDE_N = "FFA9D08E";
-
-const AVISOS_NARANJA = new Set([
-  "TRABAJO_DOMINGO_SIN_AUTORIZACION",
-  "TRABAJO_SABADO_NO_HABILITADO",
-]);
-const AVISOS_AMARILLO = new Set([
+const AVISOS_AMBAR = new Set([
   "EXCEDENTE_SOBRE_TOPE",
   "SIN_AUTORIZACION_DIA",
   "BAJO_UMBRAL",
+  "TRABAJO_DOMINGO_SIN_AUTORIZACION",
+  "TRABAJO_SABADO_NO_HABILITADO",
 ]);
 
 /**
@@ -216,8 +223,6 @@ function setLocked(celda, locked) {
 }
 
 /**
- * Relleno de celda (fgColor).
- *
  * @param {string} argb
  * @returns {{ type: "pattern", pattern: "solid", fgColor: { argb: string } }}
  */
@@ -226,8 +231,6 @@ function relleno(argb) {
 }
 
 /**
- * Relleno para formato condicional (bgColor en ExcelJS).
- *
  * @param {string} argb
  * @returns {{ type: "pattern", pattern: "solid", bgColor: { argb: string } }}
  */
@@ -236,22 +239,93 @@ function rellenoCondicional(argb) {
 }
 
 /**
- * @param {object} dia
- * @param {number} fila
- * @returns {string|null} ARGB o null (blanco)
+ * @param {string} argb
+ * @param {"thin"|"medium"} [estilo]
  */
-function colorFila(dia, fila) {
-  if (dia.bloqueante !== null && dia.bloqueante !== undefined) {
-    return COLOR_ROJO;
+function bordeColor(argb, estilo = "thin") {
+  const lado = { style: estilo, color: { argb } };
+  return { top: lado, left: lado, bottom: lado, right: lado };
+}
+
+/**
+ * @param {unknown} dni
+ * @returns {string}
+ */
+function formatearDni(dni) {
+  const digitos = String(dni ?? "").replace(/\D/g, "");
+  if (digitos === "") {
+    return "";
   }
-  const codigos = (dia.avisos ?? []).map((a) => a.codigo);
-  if (codigos.some((c) => AVISOS_NARANJA.has(c))) {
-    return COLOR_NARANJA;
+  return digitos.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/**
+ * @param {unknown} valorHora
+ * @returns {string}
+ */
+function formatoValorHora(valorHora) {
+  const n = Number(valorHora);
+  if (!Number.isFinite(n)) {
+    return FMT_MONTO;
   }
-  if (codigos.some((c) => AVISOS_AMARILLO.has(c))) {
-    return COLOR_AMARILLO;
+  return Number.isInteger(n) ? FMT_MONTO : FMT_MONTO_DEC;
+}
+
+/**
+ * @param {import("exceljs").Cell} celda
+ * @param {Partial<import("exceljs").Font>} parcial
+ */
+function fuente(celda, parcial) {
+  celda.font = {
+    name: FUENTE,
+    size: 10,
+    color: { argb: TEXTO },
+    ...(celda.font ?? {}),
+    ...parcial,
+    color: parcial.color ?? celda.font?.color ?? { argb: TEXTO },
+  };
+}
+
+/**
+ * @param {import("exceljs").Cell} celda
+ * @param {import("exceljs").Alignment} parcial
+ */
+function alinear(celda, parcial) {
+  celda.alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    ...(celda.alignment ?? {}),
+    ...parcial,
+  };
+}
+
+/**
+ * @param {import("exceljs").Worksheet} hoja
+ * @param {string} rango
+ * @param {string} argb
+ * @param {"thin"|"medium"} [estilo]
+ */
+function bordeExteriorRango(hoja, rango, argb, estilo = "thin") {
+  const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rango);
+  if (match === null) {
+    return;
   }
-  return fila % 2 === 0 ? COLOR_ALT : null;
+  const colDesde = hoja.getColumn(match[1]).number;
+  const filaDesde = Number(match[2]);
+  const colHasta = hoja.getColumn(match[3]).number;
+  const filaHasta = Number(match[4]);
+  for (let fila = filaDesde; fila <= filaHasta; fila += 1) {
+    for (let col = colDesde; col <= colHasta; col += 1) {
+      const celda = hoja.getCell(fila, col);
+      const actual = celda.border ?? {};
+      celda.border = {
+        top: fila === filaDesde ? { style: estilo, color: { argb } } : actual.top,
+        bottom: fila === filaHasta ? { style: estilo, color: { argb } } : actual.bottom,
+        left: col === colDesde ? { style: estilo, color: { argb } } : actual.left,
+        right: col === colHasta ? { style: estilo, color: { argb } } : actual.right,
+      };
+    }
+  }
 }
 
 /**
@@ -312,6 +386,20 @@ function sumarRango(valores, desdeIndice, hastaIndice) {
 }
 
 /**
+ * @param {object[]} dias
+ * @param {number} desdeIndice
+ * @param {number} hastaIndice
+ * @returns {number}
+ */
+function sumarMinutosComputadas(dias, desdeIndice, hastaIndice) {
+  let total = 0;
+  for (let i = desdeIndice; i <= hastaIndice; i += 1) {
+    total += dias[i].Hs_Computada_Sistema;
+  }
+  return total;
+}
+
+/**
  * @param {object|null} cfg
  * @returns {boolean}
  */
@@ -349,7 +437,7 @@ function tieneMarcacionCargada(marcaciones) {
 }
 
 /**
- * Jornada mostrada en K (solo presentación).
+ * Jornada mostrada en I (solo presentación; misma regla que la ex K).
  *
  * @param {object} dia
  * @param {object|null} cfg
@@ -385,7 +473,7 @@ function minutosJornadaMostrada(dia, cfg) {
 }
 
 /**
- * Autorizadas mostradas en L (solo presentación).
+ * Autorizadas mostradas en J (solo presentación; misma regla que la ex L).
  *
  * @param {object} dia
  * @param {Array<{ ingreso?: unknown, salida?: unknown }>} marcaciones
@@ -402,27 +490,11 @@ function minutosAutorizadasMostrada(dia, marcaciones) {
 }
 
 /**
- * @param {import("exceljs").Cell} celda
- * @param {"left"|"center"} horizontal
+ * @param {object} dia
+ * @returns {boolean}
  */
-function alinear(celda, horizontal) {
-  celda.alignment = {
-    ...(celda.alignment ?? {}),
-    horizontal,
-    vertical: celda.alignment?.vertical ?? "middle",
-  };
-}
-
-/**
- * @param {import("exceljs").Worksheet} hoja
- * @param {number} fila
- * @param {number} colDesde
- * @param {number} colHasta
- */
-function aplicarBordesFila(hoja, fila, colDesde, colHasta) {
-  for (let col = colDesde; col <= colHasta; col += 1) {
-    hoja.getCell(fila, col).border = BORDE_FINO;
-  }
+function tieneAvisoAmbar(dia) {
+  return (dia.avisos ?? []).some((a) => AVISOS_AMBAR.has(a.codigo));
 }
 
 /**
@@ -459,75 +531,184 @@ function llenarHojaAgente(hoja, entrada) {
 
   aplicarAnchosAgente(hoja);
   hoja.getColumn(COL_FACTOR).hidden = true;
+  hoja.properties.defaultFont = { name: FUENTE, size: 10, color: { argb: TEXTO } };
 
-  hoja.getCell("A1").value = `INFORME DE HORAS EXTRAS - ${mesTexto}/${periodo.anio}`;
-  hoja.getCell("A2").value = "Agente:";
-  hoja.getCell("B2").value = agente.nombre;
-  hoja.getCell("D2").value = "Legajo:";
-  hoja.getCell("E2").value = agente.legajo;
-  hoja.getCell("G2").value = "DNI:";
-  hoja.getCell("H2").value = agente.dni;
-  hoja.getCell("G3").value = "Valor hora:";
-  hoja.getCell("H3").value = totales.valorHoraBase;
-
-  for (const [fila, texto] of ROTULOS_TOTALES) {
-    const celda = hoja.getCell(fila, 2);
-    celda.value = texto;
-    alinear(celda, "left");
+  // —— Título (centrado sobre A:O sin combinar) ——
+  for (let col = 1; col <= COL_ULTIMA_VISIBLE; col += 1) {
+    const c = hoja.getCell(1, col);
+    if (col === 1) {
+      c.value = `INFORME DE HORAS EXTRAS - ${mesTexto}/${periodo.anio}`;
+      fuente(c, { size: 15, bold: true, color: { argb: AZUL_PIZARRA } });
+    }
+    alinear(c, { horizontal: "centerContinuous", vertical: "middle" });
+    c.border = {
+      ...(c.border ?? {}),
+      bottom: { style: "medium", color: { argb: AZUL_PIZARRA } },
+    };
   }
+  hoja.getRow(2).height = 6;
 
+  // —— Tarjeta ficha A3:F7 ——
+  for (let fila = 3; fila <= 7; fila += 1) {
+    hoja.getRow(fila).height = 21;
+    for (let col = 1; col <= 6; col += 1) {
+      hoja.getCell(fila, col).fill = relleno(FONDO_TARJETA);
+    }
+  }
+  const a3 = hoja.getCell("A3");
+  a3.value = "Agente";
+  fuente(a3, { size: 9, color: { argb: TEXTO_SEC } });
+  alinear(a3, { horizontal: "left" });
+  const a4 = hoja.getCell("A4");
+  a4.value = agente.nombre;
+  fuente(a4, { size: 13, bold: true });
+  alinear(a4, { horizontal: "left" });
+  const a5 = hoja.getCell("A5");
+  a5.value = "Legajo";
+  fuente(a5, { size: 9, color: { argb: TEXTO_SEC } });
+  alinear(a5, { horizontal: "left" });
+  const b5 = hoja.getCell("B5");
+  b5.value = Number(agente.legajo);
+  b5.numFmt = FMT_ENTERO;
+  fuente(b5, { size: 10 });
+  alinear(b5, { horizontal: "left" });
+  const a6 = hoja.getCell("A6");
+  a6.value = "DNI";
+  fuente(a6, { size: 9, color: { argb: TEXTO_SEC } });
+  alinear(a6, { horizontal: "left" });
+  const b6 = hoja.getCell("B6");
+  b6.value = formatearDni(agente.dni);
+  fuente(b6, { size: 10 });
+  alinear(b6, { horizontal: "left" });
+  const a7 = hoja.getCell("A7");
+  a7.value = "Valor hora";
+  fuente(a7, { size: 9, color: { argb: TEXTO_SEC } });
+  alinear(a7, { horizontal: "left" });
+  const b7 = hoja.getCell("B7");
+  b7.value = totales.valorHoraBase;
+  b7.numFmt = formatoValorHora(totales.valorHoraBase);
+  fuente(b7, { size: 10 });
+  alinear(b7, { horizontal: "left" });
+  bordeExteriorRango(hoja, "A3:F7", LINEA_TARJETA);
+
+  // —— Tarjeta liquidación H3:L7 ——
+  for (let fila = 3; fila <= 7; fila += 1) {
+    for (let col = 8; col <= 12; col += 1) {
+      hoja.getCell(fila, col).fill = relleno(FONDO_TARJETA);
+    }
+  }
+  for (const [fila, texto] of ROTULOS_LIQUIDACION) {
+    const rotulo = hoja.getCell(fila, 8);
+    rotulo.value = texto;
+    fuente(rotulo, {
+      size: fila === 7 ? 10 : 9,
+      bold: fila === 7,
+      color: { argb: TEXTO_SEC },
+    });
+    alinear(rotulo, { horizontal: "left" });
+  }
   escribirFormula(
-    hoja.getCell("C4"),
-    `SUM(L${FILA_PRIMERA}:L${ultima})`,
+    hoja.getCell("L3"),
+    `SUM(J${FILA_PRIMERA}:J${ultima})`,
     fraccionDia(totalAutorizadasMostradas),
     FMT_HORA,
   );
   escribirFormula(
-    hoja.getCell("C5"),
-    `SUM(M${FILA_PRIMERA}:M${ultima})`,
+    hoja.getCell("L4"),
+    `SUM(K${FILA_PRIMERA}:K${ultima})`,
     fraccionDia(totales.realizadas),
     FMT_HORA,
   );
   escribirFormula(
-    hoja.getCell("C6"),
-    `SUMIF(R${FILA_PRIMERA}:R${ultima},1,N${FILA_PRIMERA}:N${ultima})`,
+    hoja.getCell("L5"),
+    `SUMIF(P${FILA_PRIMERA}:P${ultima},1,L${FILA_PRIMERA}:L${ultima})`,
     fraccionDia(totales.finalesSimples),
     FMT_HORA,
   );
   escribirFormula(
-    hoja.getCell("C7"),
-    `SUMIF(R${FILA_PRIMERA}:R${ultima},2,N${FILA_PRIMERA}:N${ultima})`,
+    hoja.getCell("L6"),
+    `SUMIF(P${FILA_PRIMERA}:P${ultima},2,L${FILA_PRIMERA}:L${ultima})`,
     fraccionDia(totales.finalesDobles),
     FMT_HORA,
   );
   escribirFormula(
-    hoja.getCell("C8"),
-    "C6+2*C7",
+    hoja.getCell("L7"),
+    "L5+2*L6",
     fraccionDia(totales.finalesEquivalentes),
     FMT_HORA,
   );
-  escribirFormula(
-    hoja.getCell("C9"),
-    "ROUNDUP(ROUND(C8*1440,0)*H3/60,0)",
-    totales.importe,
-  );
-  for (let fila = 4; fila <= 9; fila += 1) {
-    alinear(hoja.getCell(fila, 3), "center");
+  for (let fila = 3; fila <= 7; fila += 1) {
+    const celda = hoja.getCell(fila, 12);
+    fuente(celda, { size: 10, bold: fila === 7 });
+    alinear(celda, { horizontal: "right" });
   }
+  for (let col = 8; col <= 12; col += 1) {
+    const c = hoja.getCell(7, col);
+    c.border = {
+      ...(c.border ?? {}),
+      top: { style: "thin", color: { argb: LINEA_TARJETA } },
+    };
+  }
+  bordeExteriorRango(hoja, "H3:L7", LINEA_TARJETA);
 
+  // —— Tarjeta importe M3:O7 ——
+  for (let fila = 3; fila <= 7; fila += 1) {
+    for (let col = 13; col <= 15; col += 1) {
+      hoja.getCell(fila, col).fill = relleno(RELLENO_ENCABEZADO);
+    }
+  }
+  for (let col = 13; col <= 15; col += 1) {
+    const c = hoja.getCell(4, col);
+    if (col === 13) {
+      c.value = "IMPORTE A LIQUIDAR";
+    }
+    fuente(c, { size: 9, color: { argb: TEXTO_SEC } });
+    alinear(c, { horizontal: "centerContinuous", vertical: "middle" });
+  }
+  for (let col = 13; col <= 15; col += 1) {
+    const c = hoja.getCell(5, col);
+    if (col === 13) {
+      escribirFormula(
+        c,
+        "ROUNDUP(ROUND(L7*1440,0)*B7/60,0)",
+        totales.importe,
+        FMT_MONTO,
+      );
+    }
+    fuente(c, { size: 16, bold: true, color: { argb: AZUL_PIZARRA } });
+    alinear(c, { horizontal: "centerContinuous", vertical: "middle" });
+  }
+  bordeExteriorRango(hoja, "M3:O7", LINEA_IMPORTE);
+
+  hoja.getRow(8).height = 6;
+
+  // —— Encabezado tabla fila 9 ——
   const filaEnc = hoja.getRow(FILA_ENCABEZADO);
-  filaEnc.height = 36;
+  filaEnc.height = 32;
   for (let c = 0; c < ENCABEZADOS.length; c += 1) {
     const col = c + 1;
     const celda = hoja.getCell(FILA_ENCABEZADO, col);
     celda.value = ENCABEZADOS[c];
-    celda.alignment = {
+    celda.fill = relleno(RELLENO_ENCABEZADO);
+    fuente(celda, { size: 10, bold: true, color: { argb: AZUL_PIZARRA } });
+    alinear(celda, {
       wrapText: true,
+      horizontal: col === 15 ? "left" : "center",
       vertical: "middle",
-      horizontal: col === 2 || col === 15 ? "left" : "center",
+      indent: col === 15 ? 1 : 0,
+    });
+    celda.border = {
+      bottom: { style: "medium", color: { argb: AZUL_PIZARRA } },
     };
+    if (col === 13) {
+      celda.border = {
+        ...celda.border,
+        left: { style: "thin", color: { argb: LINEA_IMPORTE } },
+      };
+    }
   }
 
+  // —— Filas de datos ——
   for (let i = 0; i < dias.length; i += 1) {
     const dia = dias[i];
     const fila = FILA_PRIMERA + i;
@@ -539,30 +720,37 @@ function llenarHojaAgente(hoja, entrada) {
     } catch {
       cfg = null;
     }
-    const color = colorFila(dia, fila);
     const esUltimo = i === dias.length - 1;
     const computadas = dia.Hs_Computada_Sistema;
-    const minutosL = autorizadasMostradas[i];
+    const minutosJ = autorizadasMostradas[i];
+    const esSabado = diaDeLaSemana(dia.fecha) === 6;
+    const bloqueante = dia.bloqueante !== null && dia.bloqueante !== undefined;
+    const editable = dia.editable === true;
+    const ambar = editable && tieneAvisoAmbar(dia);
+    const apagado = !tieneMarcacionCargada(marcaciones) && dia.Hs_Extra_Realizada === 0;
+    const colorTexto = apagado ? TEXTO_APAGADO : TEXTO;
+    const bordeInferior = {
+      style: esSabado ? "medium" : "thin",
+      color: { argb: esSabado ? CIERRE_SEMANA : LINEA_FILA },
+    };
 
-    hoja.getCell(fila, 1).value = agente.legajo;
-    hoja.getCell(fila, 2).value = agente.nombre;
-    const celdaFecha = hoja.getCell(fila, 3);
+    const celdaFecha = hoja.getCell(fila, 1);
     celdaFecha.value = fechaUtc(dia.fecha);
     celdaFecha.numFmt = FMT_FECHA;
-    hoja.getCell(fila, 4).value = DIAS_ES[diaDeLaSemana(dia.fecha)];
+    hoja.getCell(fila, 2).value = DIAS_ES[diaDeLaSemana(dia.fecha)];
 
     for (let p = 0; p < 3; p += 1) {
       const par = marcaciones[p] ?? {};
-      escribirHora(hoja.getCell(fila, 5 + p * 2), minutosDeMarca(par.ingreso));
-      escribirHora(hoja.getCell(fila, 6 + p * 2), minutosDeMarca(par.salida));
+      escribirHora(hoja.getCell(fila, 3 + p * 2), minutosDeMarca(par.ingreso));
+      escribirHora(hoja.getCell(fila, 4 + p * 2), minutosDeMarca(par.salida));
     }
 
-    escribirHora(hoja.getCell(fila, 11), minutosJornadaMostrada(dia, cfg));
-    escribirHora(hoja.getCell(fila, 12), minutosL);
-    escribirHora(hoja.getCell(fila, 13), dia.Hs_Extra_Realizada);
+    escribirHora(hoja.getCell(fila, 9), minutosJornadaMostrada(dia, cfg));
+    escribirHora(hoja.getCell(fila, 10), minutosJ);
+    escribirHora(hoja.getCell(fila, 11), dia.Hs_Extra_Realizada);
 
-    const celdaN = hoja.getCell(fila, 14);
-    escribirHora(celdaN, computadas);
+    const celdaL = hoja.getCell(fila, 12);
+    escribirHora(celdaL, computadas);
 
     hoja.getCell(fila, 15).value = archivoDia.observacion;
 
@@ -570,14 +758,14 @@ function llenarHojaAgente(hoja, entrada) {
       const inicio = filaInicioSemana(dia.fecha);
       const desdeIndice = inicio - FILA_PRIMERA;
       escribirFormula(
-        hoja.getCell(fila, 16),
-        `SUM(L${inicio}:L${fila})`,
+        hoja.getCell(fila, 13),
+        `SUM(J${inicio}:J${fila})`,
         fraccionDia(sumarRango(autorizadasMostradas, desdeIndice, i)),
         FMT_HORA,
       );
       escribirFormula(
-        hoja.getCell(fila, 17),
-        `SUM(N${inicio}:N${fila})`,
+        hoja.getCell(fila, 14),
+        `SUM(L${inicio}:L${fila})`,
         fraccionDia(sumarMinutosComputadas(dias, desdeIndice, i)),
         FMT_HORA,
       );
@@ -587,14 +775,38 @@ function llenarHojaAgente(hoja, entrada) {
 
     for (let col = 1; col <= COL_FACTOR; col += 1) {
       const celda = hoja.getCell(fila, col);
-      if (col === 2 || col === 15) {
-        alinear(celda, "left");
-      } else {
-        alinear(celda, "center");
+      fuente(celda, {
+        size: 10,
+        color: { argb: col <= 12 || col === 15 ? colorTexto : TEXTO_SEC },
+        italic: col === 13 || col === 14,
+      });
+      alinear(celda, {
+        horizontal: col === 15 ? "left" : "center",
+        vertical: "middle",
+        wrapText: col === 15,
+        indent: col === 15 ? 1 : 0,
+      });
+      if (col <= COL_ULTIMA_VISIBLE) {
+        celda.border = {
+          ...(celda.border ?? {}),
+          bottom: bordeInferior,
+        };
       }
-      if (col === 14) {
-        setLocked(celda, !dia.editable);
-        if (dia.editable) {
+      if (col === 13) {
+        celda.border = {
+          ...(celda.border ?? {}),
+          left: { style: "thin", color: { argb: LINEA_IMPORTE } },
+          bottom: bordeInferior,
+        };
+      }
+
+      if (bloqueante && col <= COL_ULTIMA_VISIBLE) {
+        celda.fill = relleno(ROJO);
+      }
+
+      if (col === 12) {
+        setLocked(celda, !editable);
+        if (editable) {
           celda.dataValidation = {
             type: "decimal",
             operator: "between",
@@ -602,60 +814,71 @@ function llenarHojaAgente(hoja, entrada) {
             showErrorMessage: true,
             errorTitle: "Valor no permitido",
             error: "Las horas finales deben estar entre 0 y las horas extra realizadas.",
-            formulae: ["0", `M${fila}`],
+            formulae: ["0", `K${fila}`],
           };
+          if (ambar) {
+            celda.fill = relleno(AMBAR);
+            celda.border = {
+              ...bordeColor(AMBAR_BORDE),
+              bottom: esSabado
+                ? { style: "medium", color: { argb: CIERRE_SEMANA } }
+                : { style: "thin", color: { argb: AMBAR_BORDE } },
+            };
+          } else {
+            celda.fill = relleno("FFFFFFFF");
+            celda.border = {
+              ...bordeColor(BORDE_EDITABLE),
+              bottom: esSabado
+                ? { style: "medium", color: { argb: CIERRE_SEMANA } }
+                : { style: "thin", color: { argb: BORDE_EDITABLE } },
+            };
+          }
           hoja.addConditionalFormatting({
-            ref: `N${fila}`,
+            ref: `L${fila}`,
             rules: [
               {
                 type: "expression",
-                formulae: [`ROUND($N${fila}*1440,0)<>${computadas}`],
-                style: { fill: rellenoCondicional(COLOR_VERDE_N) },
+                priority: 1,
+                formulae: [`ROUND($L${fila}*1440,0)<>${computadas}`],
+                style: { fill: rellenoCondicional(VERDE) },
               },
             ],
           });
         }
       } else {
         setLocked(celda, true);
-        if (color !== null) {
-          celda.fill = relleno(color);
-        }
       }
     }
-    celdaN.fill = relleno(COLOR_AZUL_N);
   }
 
-  hoja.views = [{ state: "frozen", ySplit: FILA_ENCABEZADO, activeCell: "A1", showGridLines: true }];
+  hoja.views = [{
+    state: "frozen",
+    ySplit: FILA_ENCABEZADO,
+    activeCell: "A1",
+    showGridLines: false,
+  }];
   hoja.pageSetup = {
     paperSize: 9,
     orientation: "landscape",
     fitToPage: true,
     fitToWidth: 1,
-    fitToHeight: 1,
-    printArea: `A1:Q${ultima}`,
+    fitToHeight: 0,
+    printArea: `A1:O${ultima}`,
+    printTitlesRow: "9:9",
+    showGridLines: false,
+  };
+  hoja.headerFooter = {
+    oddHeader: `&L${agente.nombre} - Legajo ${agente.legajo}`,
+    evenHeader: `&L${agente.nombre} - Legajo ${agente.legajo}`,
+    oddFooter: "&CPágina &P de &N",
+    evenFooter: "&CPágina &P de &N",
   };
 
-  for (const fila of [1, 2, 3, 4, 5, 6, 7, 8, 9, FILA_ENCABEZADO]) {
+  for (let fila = 1; fila <= FILA_ENCABEZADO; fila += 1) {
     for (let col = 1; col <= COL_FACTOR; col += 1) {
       setLocked(hoja.getCell(fila, col), true);
     }
   }
-}
-
-/**
- * Suma de computadas para el result de Q (N arranca igual a la computada).
- *
- * @param {object[]} dias
- * @param {number} desdeIndice
- * @param {number} hastaIndice
- * @returns {number}
- */
-function sumarMinutosComputadas(dias, desdeIndice, hastaIndice) {
-  let total = 0;
-  for (let i = desdeIndice; i <= hastaIndice; i += 1) {
-    total += dias[i].Hs_Computada_Sistema;
-  }
-  return total;
 }
 
 /**
@@ -670,11 +893,22 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
   for (let i = 0; i < ANCHOS_RESUMEN.length; i += 1) {
     hoja.getColumn(i + 1).width = ANCHOS_RESUMEN[i];
   }
+  hoja.properties.defaultFont = { name: FUENTE, size: 10, color: { argb: TEXTO } };
 
   const periodo = agentesOrdenados[0].resultado.periodo;
   const mesTexto = MESES_ES[periodo.mes - 1];
-  hoja.getCell("C1").value = `${mesTexto}/${periodo.anio}`;
-  alinear(hoja.getCell("C1"), "center");
+  hoja.getRow(1).height = 28;
+  for (let col = 1; col <= 6; col += 1) {
+    const c = hoja.getCell(1, col);
+    if (col === 1) {
+      c.value = `INFORME MENSUAL DE TOTAL DE HORAS EXTRAS - ${mesTexto}/${periodo.anio}`;
+      fuente(c, { size: 15, bold: true, color: { argb: AZUL_PIZARRA } });
+    }
+    alinear(c, { horizontal: "centerContinuous", vertical: "middle" });
+    c.border = {
+      bottom: { style: "medium", color: { argb: AZUL_PIZARRA } },
+    };
+  }
 
   const encabezados = [
     "Legajo Nº",
@@ -684,13 +918,19 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
     "Horas",
     "Monto Total",
   ];
+  hoja.getRow(2).height = 30;
   for (let c = 0; c < encabezados.length; c += 1) {
     const col = c + 1;
     const celda = hoja.getCell(2, col);
     celda.value = encabezados[c];
-    celda.font = { bold: true };
-    celda.fill = relleno(COLOR_ENCABEZADO);
-    alinear(celda, col === 2 ? "left" : "center");
+    celda.fill = relleno(RELLENO_ENCABEZADO);
+    fuente(celda, { size: 10, bold: true, color: { argb: AZUL_PIZARRA } });
+    alinear(celda, {
+      horizontal: col === 2 ? "left" : "center",
+      vertical: "middle",
+      wrapText: true,
+    });
+    celda.border = { bottom: { style: "medium", color: { argb: AZUL_PIZARRA } } };
   }
 
   for (let i = 0; i < agentesOrdenados.length; i += 1) {
@@ -698,15 +938,17 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
     const fila = 3 + i;
     const agente = resultado.agente;
     const totales = resultado.totales;
-    hoja.getCell(fila, 1).value = agente.legajo;
+    const celdaLegajo = hoja.getCell(fila, 1);
+    celdaLegajo.value = Number(agente.legajo);
+    celdaLegajo.numFmt = FMT_ENTERO;
     hoja.getCell(fila, 2).value = agente.nombre;
-    hoja.getCell(fila, 3).value = agente.dni;
+    hoja.getCell(fila, 3).value = formatearDni(agente.dni);
     const celdaMontoHora = hoja.getCell(fila, 4);
     celdaMontoHora.value = totales.valorHoraBase;
-    celdaMontoHora.numFmt = FMT_MONTO;
+    celdaMontoHora.numFmt = formatoValorHora(totales.valorHoraBase);
     escribirFormula(
       hoja.getCell(fila, 5),
-      `${refHoja(nombreHoja)}!$C$8`,
+      `${refHoja(nombreHoja)}!$L$7`,
       fraccionDia(totales.finalesEquivalentes),
       FMT_HORA,
     );
@@ -717,7 +959,11 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
       FMT_MONTO,
     );
     for (let col = 1; col <= 6; col += 1) {
-      alinear(hoja.getCell(fila, col), col === 2 ? "left" : "center");
+      const celda = hoja.getCell(fila, col);
+      fuente(celda, { size: 10 });
+      alinear(celda, { horizontal: col === 2 ? "left" : "center" });
+      celda.border = { bottom: { style: "thin", color: { argb: LINEA_FILA } } };
+      setLocked(celda, true);
     }
   }
 
@@ -726,7 +972,6 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
   const filaTotales = ultima + 1;
   const celdaTotales = hoja.getCell(filaTotales, 2);
   celdaTotales.value = "Totales";
-  alinear(celdaTotales, "left");
   let sumaE = 0;
   let sumaF = 0;
   for (const item of agentesOrdenados) {
@@ -746,13 +991,15 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
     FMT_MONTO,
   );
   for (let col = 1; col <= 6; col += 1) {
-    if (col !== 2) {
-      alinear(hoja.getCell(filaTotales, col), "center");
-    }
-  }
-
-  for (let fila = 2; fila <= filaTotales; fila += 1) {
-    aplicarBordesFila(hoja, fila, 1, 6);
+    const celda = hoja.getCell(filaTotales, col);
+    celda.fill = relleno(RELLENO_TOTALES);
+    fuente(celda, { size: 10, bold: true });
+    alinear(celda, { horizontal: col === 2 ? "left" : "center" });
+    celda.border = {
+      top: { style: "medium", color: { argb: AZUL_PIZARRA } },
+      bottom: { style: "medium", color: { argb: AZUL_PIZARRA } },
+    };
+    setLocked(celda, true);
   }
 
   const horasMax = catalogo.horas_maximas;
@@ -761,31 +1008,37 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
     if (maxMinutos !== null) {
       const valorHora = agentesOrdenados[0].resultado.totales.valorHoraBase ?? 0;
       const montoMax = Math.ceil((maxMinutos * Number(valorHora)) / 60);
-      const filaA = filaTotales + 2;
-      const filaB = filaTotales + 3;
-      const filaDif = filaTotales + 4;
+      const filaSub = filaTotales + 2;
+      const filaA = filaTotales + 3;
+      const filaB = filaTotales + 4;
+      const filaDif = filaTotales + 5;
 
-      const labelA = hoja.getCell(filaA, 2);
-      labelA.value = "Cant. Máxima de Hs. a abonar (A)";
-      alinear(labelA, "left");
+      const sub = hoja.getCell(filaSub, 2);
+      sub.value = "CONTROL DE HORAS MÁXIMAS";
+      fuente(sub, { size: 9, color: { argb: TEXTO_SEC } });
+      alinear(sub, { horizontal: "left" });
+
+      hoja.getCell(filaA, 2).value = "Cant. máxima de hs. a abonar (A)";
       escribirHora(hoja.getCell(filaA, 3), maxMinutos);
-      const celdaMontoMax = hoja.getCell(filaA, 4);
-      celdaMontoMax.value = montoMax;
-      celdaMontoMax.numFmt = FMT_MONTO;
+      const dA = hoja.getCell(filaA, 4);
+      dA.value = montoMax;
+      dA.numFmt = FMT_MONTO;
 
-      const labelB = hoja.getCell(filaB, 2);
-      labelB.value = "Total de horas (B)";
-      alinear(labelB, "left");
+      hoja.getCell(filaB, 2).value = "Total de horas (B)";
       escribirFormula(
         hoja.getCell(filaB, 3),
         `E${filaTotales}`,
         fraccionDia(sumaE),
         FMT_HORA,
       );
+      escribirFormula(
+        hoja.getCell(filaB, 4),
+        `F${filaTotales}`,
+        sumaF,
+        FMT_MONTO,
+      );
 
-      const labelDif = hoja.getCell(filaDif, 2);
-      labelDif.value = "Diferencia (A - B)";
-      alinear(labelDif, "left");
+      hoja.getCell(filaDif, 2).value = "Diferencia (A - B)";
       const supera = sumaE > maxMinutos;
       const resultDif = supera
         ? `SE SUPERA EL MÁXIMO POR ${formatearSuperacion(sumaE - maxMinutos)}`
@@ -796,29 +1049,57 @@ function llenarResumen(hoja, agentesOrdenados, catalogo) {
         resultDif,
         supera ? undefined : FMT_HORA,
       );
-      if (supera) {
-        hoja.getCell(filaDif, 3).font = { color: { argb: "FFFF0000" } };
-        hoja.getCell(filaDif, 3).fill = relleno(COLOR_ROJO);
-      }
+      escribirFormula(
+        hoja.getCell(filaDif, 4),
+        `D${filaA}-D${filaB}`,
+        montoMax - sumaF,
+        FMT_MONTO_DIFF,
+      );
 
-      for (const filaCtrl of [filaA, filaB, filaDif]) {
-        for (let col = 1; col <= 4; col += 1) {
-          if (col !== 2) {
-            alinear(hoja.getCell(filaCtrl, col), "center");
+      for (const filaCtrl of [filaSub, filaA, filaB, filaDif]) {
+        for (let col = 2; col <= 4; col += 1) {
+          const celda = hoja.getCell(filaCtrl, col);
+          if (filaCtrl !== filaSub) {
+            fuente(celda, {
+              size: 10,
+              bold: filaCtrl === filaDif,
+              color: { argb: filaCtrl === filaDif ? VERDE_TEXTO : TEXTO },
+            });
           }
+          alinear(celda, { horizontal: col === 2 ? "left" : "center" });
+          setLocked(celda, true);
         }
-        aplicarBordesFila(hoja, filaCtrl, 2, 4);
       }
+      bordeExteriorRango(hoja, `B${filaSub}:D${filaDif}`, LINEA_TARJETA);
+      hoja.addConditionalFormatting({
+        ref: `C${filaDif}:D${filaDif}`,
+        rules: [
+          {
+            type: "expression",
+            priority: 1,
+            formulae: [`$C$${filaB}>$C$${filaA}`],
+            style: { font: { color: { argb: ROJO_TEXTO }, bold: true } },
+          },
+        ],
+      });
     }
   }
 
+  hoja.views = [{ state: "normal", showGridLines: false, activeCell: "A1" }];
   hoja.pageSetup = {
     paperSize: 9,
     orientation: "landscape",
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 1,
+    showGridLines: false,
   };
+
+  for (let fila = 1; fila <= 2; fila += 1) {
+    for (let col = 1; col <= 6; col += 1) {
+      setLocked(hoja.getCell(fila, col), true);
+    }
+  }
 }
 
 /**
